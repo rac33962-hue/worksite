@@ -303,7 +303,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 <script>
 // ═══ DATA ═══
-const ADMIN_PW = '1234'; // 기본 비밀번호 — 원하시면 변경하세요
+const ADMIN_PW = '1234';
+const API_URL = 'https://script.google.com/macros/s/AKfycbybpuqrd5F9LXOJyGyTSk3JqJf6AAKniyl-zhKYvuHpR2u0QnFPQS3o14KR_HPFFZlk/exec';
 const COLORS = [
   {bg:'#e8f0fe',tx:'#1a56a0',name:'blue'},
   {bg:'#e0f5ee',tx:'#0e6b50',name:'teal'},
@@ -323,7 +324,11 @@ const STORES_FIXED = [
 const BRANDS_DESIGN = ['나인원 공식&리블','홈페이지','나인원 브랜드','외주','셀린비','바이탈메디','설오담','시어스','기타'];
 const STATUSES = ['진행중','완료','모집중','컨펌중','진행예정'];
 
-let DB = JSON.parse(localStorage.getItem('teamreport_v2') || 'null') || { members: [], weeks: {} };
+let DB;
+try {
+  DB = JSON.parse(localStorage.getItem('teamreport_v3') || 'null') || { members: [], weeks: {} };
+  if (!DB.members || !Array.isArray(DB.members)) DB = { members: [], weeks: {} };
+} catch(e) { DB = { members: [], weeks: {} }; }
 let wOff = 0;
 let selectedColor = COLORS[0];
 
@@ -339,7 +344,7 @@ if (DB.members.length === 0) {
   save();
 }
 
-function save() { localStorage.setItem('teamreport_v2', JSON.stringify(DB)); }
+function save() { localStorage.setItem('teamreport_v3', JSON.stringify(DB)); }
 function wKey(off=wOff) {
   const d = new Date(); d.setDate(d.getDate() + off*7);
   const y = d.getFullYear();
@@ -389,11 +394,12 @@ function buildMemberNav() {
   const nav = document.getElementById('memberNav');
   nav.innerHTML = '';
   DB.members.forEach(m => {
+    if (!m.color || typeof m.color !== 'object') m.color = COLORS[0];
     const el = document.createElement('div');
     el.className = 'nav-item';
     el.id = 'nav-' + m.id;
     el.onclick = () => { showPanel(m.id); loadMemberPanel(m.id); };
-    el.innerHTML = `<div class="nav-dot" style="background:${m.color.tx}"></div>${m.name}${m.status==='leave'?` <span style="font-size:10px;color:var(--text-3);margin-left:auto">휴직</span>`:''}`;
+    el.innerHTML = `<div class="nav-dot" style="background:${m.color.tx||'#999'}"></div>${m.name}${m.status==='leave'?` <span style="font-size:10px;color:var(--text-3);margin-left:auto">휴직</span>`:''}`;
     nav.appendChild(el);
   });
 }
@@ -825,15 +831,33 @@ function copySummary() {
 
 function downloadJpg() {
   const el = document.getElementById('exportTarget');
+  if (!el) { toast('먼저 요약본을 열어주세요'); return; }
   toast('JPG 생성 중...');
-  html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false }).then(canvas => {
-    const a = document.createElement('a');
-    const weekStr = wRange().replace(/\//g,'-').replace(/\s/g,'');
-    a.download = `주간보고_${weekStr}.jpg`;
-    a.href = canvas.toDataURL('image/jpeg', 0.92);
-    a.click();
-    toast('JPG 다운로드 완료');
-  }).catch(()=>toast('다운로드 실패'));
+  // 구글 폰트 등 외부 리소스 제외하고 캡처
+  html2canvas(el, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    useCORS: false,
+    allowTaint: true,
+    logging: false,
+    onclone: (doc) => {
+      // 폰트를 시스템 폰트로 교체해 렌더링 오류 방지
+      doc.body.style.fontFamily = 'sans-serif';
+    }
+  }).then(canvas => {
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const weekStr = wRange().replace(/[\/\s]/g, '-');
+      a.download = `주간보고_${weekStr}.jpg`;
+      a.href = url;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast('JPG 다운로드 완료');
+    }, 'image/jpeg', 0.92);
+  }).catch(e => { console.error(e); toast('다운로드 실패: ' + e.message); });
 }
 
 // ═══ ADD MEMBER ═══
@@ -910,10 +934,32 @@ function toast(msg) {
 
 // ═══ INIT ═══
 document.getElementById('weekLbl').textContent = wRange();
-buildMemberNav();
-buildMemberPanels();
 buildColorPicker();
-showFirstMember();
+
+// 구글 시트에서 팀원 불러오기
+fetch(`${API_URL}?action=getMembers`)
+  .then(r => r.json())
+  .then(res => {
+    if (res.ok && res.data.length) {
+      DB.members = res.data.map((m, i) => ({
+        id: m['ID'] || 'mb_'+i,
+        name: m['이름'] || '',
+        status: m['상태'] || 'active',
+        color: COLORS[i % COLORS.length],
+        type: (m['이름']==='공수진') ? 'marketing' : 'design'
+      }));
+      save();
+    }
+    buildMemberNav();
+    buildMemberPanels();
+    showFirstMember();
+  })
+  .catch(() => {
+    // API 실패시 로컬 데이터로 폴백
+    buildMemberNav();
+    buildMemberPanels();
+    showFirstMember();
+  });
 </script>
 </body>
 </html>
