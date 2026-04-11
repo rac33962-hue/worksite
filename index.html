@@ -1402,9 +1402,9 @@ fetch(`${API_URL}?action=getMembers`)
       }));
       save();
     }
-    showReportPanel();
+    showPanel('notice');
   })
-  .catch(() => { showReportPanel(); });
+  .catch(() => { showPanel('notice'); });
 </script>
 </body>
 </html>
