@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>주간 업무 보고 | Team Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root {
+  --bg: #f7f6f3;
+  --surface: #ffffff;
+  --border: rgba(0,0,0,0.09);
+  --border-strong: rgba(0,0,0,0.18);
+  --text: #1a1a1a;
+  --text-2: #5a5a5a;
+  --text-3: #999;
+  --accent: #1a1a1a;
+  --accent-light: #f0ede8;
+  --blue-bg: #e8f0fe; --blue-tx: #1a56a0;
+  --teal-bg: #e0f5ee; --teal-tx: #0e6b50;
+  --pink-bg: #fde8f0; --pink-tx: #992248;
+  --amber-bg: #fef3e0; --amber-tx: #8a520a;
+  --purple-bg: #eeeefe; --purple-tx: #4a3fb5;
+  --red-bg: #fde8e8; --red-tx: #a02020;
+  --radius: 10px; --radius-lg: 16px;
+  --shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+/* LAYOUT */
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; position: fixed; top: 0; bottom: 0; left: 0; overflow-y: auto; z-index: 10; }
+.main { margin-left: 220px; padding: 2rem; flex: 1; }
+
+/* SIDEBAR */
+.sidebar-logo { padding: 1.5rem 1.25rem 1rem; border-bottom: 1px solid var(--border); }
+.sidebar-logo .brand { font-family: 'DM Serif Display', serif; font-size: 17px; color: var(--text); letter-spacing: -0.3px; }
+.sidebar-logo .sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+.week-nav { padding: .75rem 1rem; border-bottom: 1px solid var(--border); }
+.week-nav-label { font-size: 11px; color: var(--text-3); margin-bottom: 6px; letter-spacing: .05em; text-transform: uppercase; }
+.week-ctrl { display: flex; align-items: center; gap: 6px; }
+.week-ctrl button { background: transparent; border: 1px solid var(--border-strong); border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 13px; color: var(--text-2); font-family: inherit; }
+.week-ctrl button:hover { background: var(--bg); }
+.week-lbl { flex: 1; font-size: 12px; font-weight: 500; color: var(--text); text-align: center; }
+
+.nav-section { padding: .625rem 1rem .25rem; font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .07em; font-weight: 700; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: .5rem 1rem; cursor: pointer; font-size: 13px; color: var(--text-2); border-left: 3px solid transparent; transition: all .15s; }
+.nav-item:hover { color: var(--text); background: var(--bg); }
+.nav-item.active { color: var(--text); background: var(--accent-light); border-left-color: var(--text); font-weight: 500; }
+.nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.nav-item.locked { opacity: .6; }
+.nav-item.locked::after { content: '🔒'; font-size: 10px; margin-left: auto; }
+
+.sidebar-footer { margin-top: auto; padding: 1rem; border-top: 1px solid var(--border); }
+.btn-add-member { width: 100%; padding: 7px; background: var(--text); color: #fff; border: none; border-radius: var(--radius); font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; }
+.btn-add-member:hover { opacity: .85; }
+
+/* PAGE HEADER */
+.page-header { margin-bottom: 1.75rem; }
+.page-header h2 { font-size: 22px; font-weight: 700; color: var(--text); }
+.page-header .subtitle { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+
+/* CARDS */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1rem; }
+.card-title { font-size: 13px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1rem; }
+
+.field-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; display: block; font-weight: 500; }
+textarea, input[type=text], input[type=number], input[type=password], select {
+  font-family: inherit; font-size: 13px; padding: 7px 10px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface); color: var(--text); outline: none;
+  transition: border-color .15s;
+}
+textarea:focus, input:focus, select:focus { border-color: var(--text); }
+textarea { width: 100%; resize: vertical; line-height: 1.6; min-height: 70px; }
+input[type=number] { -moz-appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+.btn-primary { background: var(--text); color: #fff; border: none; border-radius: var(--radius); padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
+.btn-primary:hover { opacity: .85; }
+.btn-secondary { background: transparent; border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 7px 14px; font-size: 13px; color: var(--text-2); cursor: pointer; font-family: inherit; }
+.btn-secondary:hover { background: var(--bg); }
+.btn-full { width: 100%; }
+.btn-icon { background: transparent; border: none; cursor: pointer; color: var(--text-3); padding: 3px 6px; font-size: 16px; }
+.btn-icon:hover { color: var(--text); }
+.btn-add { background: transparent; border: 1px dashed var(--border-strong); border-radius: var(--radius); padding: 5px 12px; font-size: 12px; color: var(--text-3); cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 4px; }
+.btn-add:hover { color: var(--text); border-color: var(--text); }
+
+/* BRAND ROW */
+.brand-row { display: grid; gap: 8px; align-items: center; margin-bottom: 8px; }
+.brand-row-3 { grid-template-columns: 1fr 70px 70px 28px; }
+.brand-row-2 { grid-template-columns: 1fr 110px 28px; }
+.brand-row select { width: 100%; }
+.brand-row input[type=number] { text-align: center; width: 100%; }
+.col-hdr { display: grid; gap: 8px; margin-bottom: 4px; }
+.col-hdr span { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+
+.divider { height: 1px; background: var(--border); margin: 1.25rem 0; }
+
+/* BADGE */
+.badge { font-size: 11px; padding: 2px 9px; border-radius: 20px; display: inline-flex; align-items: center; }
+
+/* PANEL */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* LOCK SCREEN */
+.lock-screen { max-width: 360px; margin: 0 auto; padding-top: 3rem; text-align: center; }
+.lock-icon { font-size: 40px; margin-bottom: 1.25rem; }
+.lock-screen h3 { font-size: 18px; font-weight: 600; margin-bottom: .5rem; }
+.lock-screen p { font-size: 13px; color: var(--text-2); margin-bottom: 1.5rem; }
+.lock-input-row { display: flex; gap: 8px; }
+.lock-input-row input { flex: 1; }
+.lock-error { font-size: 12px; color: #e24b4b; margin-top: 8px; min-height: 18px; }
+
+/* SUMMARY CARD */
+.sum-wrap { max-width: 800px; }
+.sum-export-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.75rem; }
+.sum-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--text); }
+.sum-title-block .company { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--text); }
+.sum-title-block .week { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.sum-badge-report { background: var(--text); color: #fff; font-size: 11px; padding: 4px 12px; border-radius: 4px; font-weight: 500; }
+
+.sum-stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.25rem; }
+.sum-stat { background: var(--bg); border-radius: var(--radius); padding: .875rem; text-align: center; }
+.sum-stat .val { font-size: 18px; font-weight: 700; color: var(--text); }
+.sum-stat .lbl { font-size: 11px; color: var(--text-3); margin-top: 3px; }
+
+.sum-section { margin-bottom: 1.25rem; }
+.sum-section-title { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .07em; border-left: 3px solid var(--text); padding-left: 8px; margin-bottom: .75rem; }
+.sum-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.sum-table th { font-size: 11px; color: var(--text-3); text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); font-weight: 500; }
+.sum-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text); }
+.sum-table tr:last-child td { border-bottom: none; }
+.sum-lines { font-size: 13px; line-height: 1.9; color: var(--text); white-space: pre-wrap; }
+.sum-empty { font-size: 13px; color: var(--text-3); }
+.sum-person-block { margin-bottom: .5rem; }
+.sum-person-name { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.sum-person-items { font-size: 13px; color: var(--text-2); padding-left: 10px; line-height: 1.8; }
+
+.export-btns { display: flex; gap: 10px; margin-bottom: 1.25rem; }
+
+/* MEMBER MODAL */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border-radius: var(--radius-lg); padding: 1.75rem; width: 380px; max-width: 90vw; }
+.modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 1.25rem; }
+.modal-field { margin-bottom: 1rem; }
+.modal-field label { font-size: 12px; color: var(--text-2); display: block; margin-bottom: 5px; }
+.modal-field input, .modal-field select { width: 100%; }
+.modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1.25rem; }
+.color-picker-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-opt { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color .15s; }
+.color-opt.sel { border-color: var(--text); }
+
+/* TOAST */
+#toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 9px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 200; white-space: nowrap; }
+
+/* STORE LIST */
+.store-list-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 10px; }
+.store-list-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: .75rem; display: flex; align-items: center; }
+.store-list-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.store-input-group { display: flex; flex-direction: column; gap: 4px; }
+.store-input-group label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+.store-input-group input { font-size: 13px; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); width: 100%; }
+.store-input-group span { font-size: 11px; color: var(--text-3); }
+
+/* STORE TABS */
+.store-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
+.store-tab { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border-strong); background: transparent; color: var(--text-2); font-family: inherit; transition: all .15s; white-space: nowrap; }
+.store-tab:hover { background: var(--bg); color: var(--text); }
+.store-tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+.store-tab.add-tab { border-style: dashed; color: var(--text-3); }
+.store-tab.add-tab:hover { color: var(--text); border-color: var(--text); }
+.store-panel { display: none; }
+.store-panel.active { display: block; }
+.store-amt-row { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
+.store-amt-row label { font-size: 12px; color: var(--text-2); min-width: 60px; }
+.store-amt-row input { flex: 1; max-width: 200px; }
+.store-amt-row .unit { font-size: 13px; color: var(--text-3); }
+.store-orders-row { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
+.store-orders-row label { font-size: 12px; color: var(--text-2); min-width: 60px; }
+.store-orders-row input { flex: 1; max-width: 120px; }
+.store-orders-row .unit { font-size: 13px; color: var(--text-3); }
+.store-note-row { margin-bottom: .5rem; }
+
+/* RESPONSIVE */
+@media (max-width: 640px) {
+  .sidebar { width: 100%; height: auto; position: relative; flex-direction: row; flex-wrap: wrap; }
+  .main { margin-left: 0; padding: 1rem; }
+  .sum-stat-row { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- SIDEBAR -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand">Team Report</div>
+      <div class="sub">주간 업무 보고</div>
+    </div>
+    <div class="week-nav">
+      <div class="week-nav-label">보고 주차</div>
+      <div class="week-ctrl">
+        <button onclick="chW(-1)">‹</button>
+        <span class="week-lbl" id="weekLbl">—</span>
+        <button onclick="chW(1)">›</button>
+      </div>
+    </div>
+
+    <div class="nav-section">팀원</div>
+    <div id="memberNav"></div>
+
+    <div class="nav-section" style="margin-top:.5rem">관리</div>
+    <div class="nav-item locked" id="nav-mgr" onclick="openLocked('mgr')">
+      <div class="nav-dot" style="background:#ba7517"></div>관리자 메모
+    </div>
+    <div class="nav-item locked" id="nav-sum" onclick="openLocked('sum')">
+      <div class="nav-dot" style="background:#1a56a0"></div>최종 요약본
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="btn-add-member" onclick="openAddMember()">+ 신규 팀원 추가</button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+    <!-- Member panels -->
+    <div id="panelsContainer"></div>
+
+    <!-- MGR panel (locked) -->
+    <div id="panel-mgr" class="panel">
+      <div id="mgrLock"></div>
+      <div id="mgrContent" style="display:none">
+        <div class="page-header">
+          <h2>관리자 메모</h2>
+          <div class="subtitle">비공개 — 관리자만 열람 가능</div>
+        </div>
+        <div class="card">
+          <div class="card-title">이번 주 특이사항 / 공유사항</div>
+          <textarea id="mgrNote" placeholder="팀 공유 사항, 이슈, 주요 결정사항..."></textarea>
+          <div style="margin-top:.75rem">
+            <div class="card-title" style="margin-bottom:.5rem">다음 주 주요 일정</div>
+            <textarea id="mgrNext" placeholder="다음 주 진행될 업무, 마감, 일정..."></textarea>
+          </div>
+          <div style="margin-top:1rem">
+            <button class="btn-primary btn-full" onclick="saveMgr()">저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUM panel (locked) -->
+    <div id="panel-sum" class="panel">
+      <div id="sumLock"></div>
+      <div id="sumContent" style="display:none">
+        <div class="page-header">
+          <h2>최종 요약본</h2>
+          <div class="subtitle" id="sumSubtitle">—</div>
+        </div>
+        <div class="sum-wrap">
+          <div class="export-btns">
+            <button class="btn-secondary" onclick="copySummary()">📋 텍스트 복사</button>
+            <button class="btn-primary" onclick="downloadJpg()">⬇ JPG 다운로드</button>
+          </div>
+          <div id="sumExportCard" class="sum-export-card"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ADD MEMBER MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3>신규 팀원 추가</h3>
+    <div class="modal-field">
+      <label>이름</label>
+      <input type="text" id="newName" placeholder="홍길동">
+    </div>
+    <div class="modal-field">
+      <label>파트 / 직책</label>
+      <input type="text" id="newRole" placeholder="디자인 / 마케팅 등">
+    </div>
+    <div class="modal-field">
+      <label>상태</label>
+      <select id="newStatus">
+        <option value="active">재직 중</option>
+        <option value="leave">육아휴직</option>
+        <option value="inactive">비활성</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>아바타 색상</label>
+      <div class="color-picker-row" id="colorPicker"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal()">취소</button>
+      <button class="btn-primary" onclick="addMember()">추가</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══ DATA ═══
+const ADMIN_PW = '1234';
+const API_URL = 'https://script.google.com/macros/s/AKfycbybpuqrd5F9LXOJyGyTSk3JqJf6AAKniyl-zhKYvuHpR2u0QnFPQS3o14KR_HPFFZlk/exec';
+const COLORS = [
+  {bg:'#e8f0fe',tx:'#1a56a0',name:'blue'},
+  {bg:'#e0f5ee',tx:'#0e6b50',name:'teal'},
+  {bg:'#fde8f0',tx:'#992248',name:'pink'},
+  {bg:'#fef3e0',tx:'#8a520a',name:'amber'},
+  {bg:'#eeeefe',tx:'#4a3fb5',name:'purple'},
+  {bg:'#fde8e8',tx:'#a02020',name:'red'},
+  {bg:'#f0ede8',tx:'#4a4030',name:'sand'},
+];
+const STORES_FIXED = [
+  '나인원코스메디 스마트스토어',
+  '나인원코스메디 공식몰',
+  '셀린비 스마트스토어',
+  '루아 스마트스토어',
+  '에이엔케이 스토어',
+];
+const BRANDS_DESIGN = ['나인원 공식&리블','홈페이지','나인원 브랜드','외주','셀린비','바이탈메디','설오담','시어스','기타'];
+const STATUSES = ['진행중','완료','모집중','컨펌중','진행예정'];
+
+let DB;
+try {
+  DB = JSON.parse(localStorage.getItem('teamreport_v3') || 'null') || { members: [], weeks: {} };
+  if (!DB.members || !Array.isArray(DB.members)) DB = { members: [], weeks: {} };
+} catch(e) { DB = { members: [], weeks: {} }; }
+let wOff = 0;
+let selectedColor = COLORS[0];
+
+// Init default members if empty
+if (DB.members.length === 0) {
+  DB.members = [
+    { id:'gong', name:'공수진', role:'마케팅', color:COLORS[0], status:'active', type:'marketing' },
+    { id:'kh',   name:'구현희', role:'디자인',  color:COLORS[1], status:'active', type:'design'    },
+    { id:'sg',   name:'서귀복', role:'디자인',  color:COLORS[3], status:'active', type:'design'    },
+    { id:'bh',   name:'배현호', role:'디자인',  color:COLORS[4], status:'active', type:'design'    },
+    { id:'yi',   name:'이영인', role:'디자인',  color:COLORS[2], status:'leave',  type:'design'    },
+  ];
+  save();
+}
+
+function save() { localStorage.setItem('teamreport_v3', JSON.stringify(DB)); }
+function wKey(off=wOff) {
+  const d = new Date(); d.setDate(d.getDate() + off*7);
+  const y = d.getFullYear();
+  const wn = getWeekNum(d);
+  return `${y}-W${String(wn).padStart(2,'0')}`;
+}
+function getWeekNum(d) {
+  const onejan = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+}
+function wRange(off=wOff) {
+  const d = new Date(); const dy = d.getDay();
+  const mon = new Date(d); mon.setDate(d.getDate() - (dy===0?6:dy-1) + off*7);
+  const fri = new Date(mon); fri.setDate(mon.getDate()+4);
+  const fmt = dt => `${dt.getMonth()+1}/${dt.getDate()}`;
+  return `${mon.getFullYear()}년 ${fmt(mon)}–${fmt(fri)}`;
+}
+function gw() { return DB.weeks[wKey()] || {}; }
+function sw2(obj) {
+  if (!DB.weeks[wKey()]) DB.weeks[wKey()] = {};
+  Object.assign(DB.weeks[wKey()], obj);
+  save();
+}
+function getMemberData(mid) { return (gw().members || {})[mid] || {}; }
+function setMemberData(mid, obj) {
+  const w = DB.weeks[wKey()] || {};
+  if (!w.members) w.members = {};
+  w.members[mid] = Object.assign(w.members[mid] || {}, obj);
+  DB.weeks[wKey()] = w;
+  save();
+}
+
+// ═══ NAV ═══
+function chW(dir) { wOff += dir; document.getElementById('weekLbl').textContent = wRange(); reloadAll(); }
+
+let currentPanel = null;
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + id)?.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('nav-' + id)?.classList.add('active');
+  currentPanel = id;
+}
+
+// ═══ MEMBER NAV ═══
+function buildMemberNav() {
+  const nav = document.getElementById('memberNav');
+  nav.innerHTML = '';
+  DB.members.forEach(m => {
+    if (!m.color || typeof m.color !== 'object') m.color = COLORS[0];
+    const el = document.createElement('div');
+    el.className = 'nav-item';
+    el.id = 'nav-' + m.id;
+    el.onclick = () => { showPanel(m.id); loadMemberPanel(m.id); };
+    el.innerHTML = `<div class="nav-dot" style="background:${m.color.tx||'#999'}"></div>${m.name}${m.status==='leave'?` <span style="font-size:10px;color:var(--text-3);margin-left:auto">휴직</span>`:''}`;
+    nav.appendChild(el);
+  });
+}
+
+// ═══ MEMBER PANELS ═══
+function buildMemberPanels() {
+  const cont = document.getElementById('panelsContainer');
+  cont.innerHTML = '';
+  DB.members.forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'panel';
+    div.id = 'panel-' + m.id;
+    div.dataset.mid = m.id;
+    cont.appendChild(div);
+  });
+}
+
+function loadMemberPanel(mid) {
+  const m = DB.members.find(x => x.id === mid);
+  if (!m) return;
+  const panel = document.getElementById('panel-' + mid);
+  const d = getMemberData(mid);
+  const isLeave = m.status === 'leave';
+
+  panel.innerHTML = `
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:44px;height:44px;border-radius:50%;background:${m.color.bg};color:${m.color.tx};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0">${m.name[0]}</div>
+        <div>
+          <h2>${m.name}</h2>
+          <div class="subtitle">${m.role}${isLeave?' · 육아휴직 중':''}</div>
+        </div>
+      </div>
+    </div>
+    ${isLeave ? '<div class="card"><p style="color:var(--text-2);font-size:13px">육아휴직 중인 팀원입니다. 복직 후 보고서 작성이 가능합니다.</p></div>' : buildMemberForm(m, d)}`;
+}
+
+function buildMemberForm(m, d) {
+  if (m.type === 'marketing') return buildMktForm(d);
+  return buildDesignForm(d);
+}
+
+function buildMktForm(d) {
+  const customStores = d.customStores || [];
+  const allStores = [...STORES_FIXED, ...customStores];
+  const storeData = d.storeData || {};
+  const exp = (d.exp || [{ name: '', qty: '', status: '진행중' }]);
+
+  const storeListHtml = allStores.map(s => {
+    const sd = storeData[s] || {};
+    const isCustom = !STORES_FIXED.includes(s);
+    return `<div class="store-list-row">
+      <div class="store-list-name">${s}${isCustom ? `<button class="btn-icon" style="font-size:12px;margin-left:4px" onclick="removeStore('${encodeURIComponent(s)}')">×</button>` : ''}</div>
+      <div class="store-list-inputs">
+        <div class="store-input-group"><label>주간매출</label><input type="number" class="store-amt" data-store="${encodeURIComponent(s)}" value="${sd.amt||''}" placeholder="0"><span>원</span></div>
+        <div class="store-input-group"><label>월매출</label><input type="number" class="store-monthly" data-store="${encodeURIComponent(s)}" value="${sd.monthly||''}" placeholder="0"><span>원</span></div>
+        <div class="store-input-group"><label>발주</label><input type="number" class="store-orders" data-store="${encodeURIComponent(s)}" value="${sd.orders||''}" placeholder="0"><span>건</span></div>
+        <div class="store-input-group" style="grid-column:1/-1"><label>메모</label><input type="text" class="store-memo" data-store="${encodeURIComponent(s)}" value="${sd.memo||''}" placeholder="특이사항..."></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">스마트스토어 매출</div>
+      <div id="storeList">${storeListHtml}</div>
+      <button class="btn-add" style="margin-top:8px" onclick="addStoreRow()">+ 스토어 추가</button>
+    </div>
+    <div class="card">
+      <div class="card-title">체험단 현황</div>
+      <div id="expRows">${exp.map(e=>expRowHtml(e.name,e.qty,e.status)).join('')}</div>
+      <button class="btn-add" onclick="addExpRow()">+ 체험단 추가</button>
+    </div>
+    <div class="card">
+      <div class="card-title">기타 주요 업무</div>
+      <textarea id="mktEtc" placeholder="광고, SNS, 언론기사, 온라인 단속 등...">${d.mktEtc||''}</textarea>
+    </div>
+    <button class="btn-primary btn-full" style="max-width:200px" onclick="saveMktPanel()">저장</button>`;
+}
+
+function addStoreRow() {
+  const name = prompt('추가할 스토어 이름을 입력하세요');
+  if (!name || !name.trim()) return;
+  const mid = currentPanel;
+  const d = getMemberData(mid);
+  const custom = d.customStores || [];
+  if ([...STORES_FIXED, ...custom].includes(name.trim())) { toast('이미 존재하는 스토어입니다'); return; }
+  custom.push(name.trim());
+  setMemberData(mid, { customStores: custom });
+  loadMemberPanel(mid);
+}
+
+function removeStore(encodedName) {
+  const name = decodeURIComponent(encodedName);
+  if (!confirm(`"${name}" 삭제할까요?`)) return;
+  const mid = currentPanel;
+  const d = getMemberData(mid);
+  const custom = (d.customStores || []).filter(s => s !== name);
+  const storeData = d.storeData || {};
+  delete storeData[name];
+  setMemberData(mid, { customStores: custom, storeData });
+  loadMemberPanel(mid);
+}
+
+function expRowHtml(name, qty, status) {
+  const opts = STATUSES.map(s=>`<option${s===status?' selected':''}>${s}</option>`).join('');
+  return `<div class="brand-row" style="grid-template-columns:1fr 80px 90px 28px;margin-bottom:7px">
+    <input type="text" value="${name||''}" placeholder="체험단명/브랜드">
+    <input type="number" value="${qty||''}" placeholder="건수">
+    <select>${opts}</select>
+    <button class="btn-icon" onclick="this.parentNode.remove()">×</button>
+  </div>`;
+}
+function addExpRow() { document.getElementById('expRows').insertAdjacentHTML('beforeend', expRowHtml('','','진행중')); }
+
+function saveMktPanel() {
+  const mid = currentPanel;
+  const d = getMemberData(mid);
+  const customStores = d.customStores || [];
+  const allStores = [...STORES_FIXED, ...customStores];
+  const storeData = {};
+  allStores.forEach(s => {
+    const enc = encodeURIComponent(s);
+    storeData[s] = {
+      amt: document.querySelector(`.store-amt[data-store="${enc}"]`)?.value || '',
+      monthly: document.querySelector(`.store-monthly[data-store="${enc}"]`)?.value || '',
+      orders: document.querySelector(`.store-orders[data-store="${enc}"]`)?.value || '',
+      memo: document.querySelector(`.store-memo[data-store="${enc}"]`)?.value || '',
+    };
+  });
+  const exp = []; document.querySelectorAll('#expRows .brand-row').forEach(r=>{
+    const ins=r.querySelectorAll('input'), sel=r.querySelector('select');
+    exp.push({name:ins[0]?.value||'',qty:ins[1]?.value||'',status:sel?.value||''});
+  });
+  setMemberData(mid, { storeData, customStores, exp, mktEtc: document.getElementById('mktEtc')?.value||'' });
+  toast('저장 완료');
+}
+
+function buildDesignForm(d) {
+  const brands = d.brands || [{ brand: BRANDS_DESIGN[0], done: '', wip: '' }];
+  const next = d.nextBrands || [{ brand: BRANDS_DESIGN[0], done: '' }];
+  return `
+    <div class="card">
+      <div class="card-title">이번 주 완료 작업</div>
+      <div class="col-hdr brand-row-3" style="padding-right:28px">
+        <span>브랜드</span><span style="text-align:center">완료</span><span style="text-align:center">미작업</span>
+      </div>
+      <div id="curBrandRows">${brands.map(b=>designRowHtml(b.brand,b.done,b.wip)).join('')}</div>
+      <button class="btn-add" onclick="addDesignRow('cur')">+ 브랜드 추가</button>
+    </div>
+    <div class="card">
+      <div class="card-title">다음 주 예정 작업</div>
+      <div class="col-hdr" style="display:grid;grid-template-columns:1fr 70px 28px;gap:8px;padding-right:0;margin-bottom:4px">
+        <span>브랜드</span><span style="text-align:center">예정 수량</span>
+      </div>
+      <div id="nextBrandRows">${next.map(b=>nextRowHtml(b.brand,b.done)).join('')}</div>
+      <button class="btn-add" onclick="addDesignRow('next')">+ 브랜드 추가</button>
+    </div>
+    <div class="card">
+      <div class="card-title">기타 / 이슈</div>
+      <textarea id="designNote" placeholder="컨펌 대기, 진행 이슈 등...">${d.note||''}</textarea>
+    </div>
+    <button class="btn-primary btn-full" style="max-width:200px" onclick="saveDesignPanel()">저장</button>`;
+}
+
+function designRowHtml(brand, done, wip) {
+  return `<div class="brand-row brand-row-3" style="margin-bottom:7px">
+    <input type="text" value="${brand||''}" placeholder="브랜드명 직접 입력">
+    <input type="number" value="${done||''}" placeholder="0">
+    <input type="number" value="${wip||''}" placeholder="0">
+    <button class="btn-icon" onclick="this.parentNode.remove()">×</button>
+  </div>`;
+}
+function nextRowHtml(brand, done) {
+  return `<div class="brand-row" style="grid-template-columns:1fr 70px 28px;margin-bottom:7px">
+    <input type="text" value="${brand||''}" placeholder="브랜드명 직접 입력">
+    <input type="number" value="${done||''}" placeholder="0">
+    <button class="btn-icon" onclick="this.parentNode.remove()">×</button>
+  </div>`;
+}
+function addDesignRow(type) {
+  if (type==='cur') document.getElementById('curBrandRows').insertAdjacentHTML('beforeend', designRowHtml(BRANDS_DESIGN[0],'',''));
+  else document.getElementById('nextBrandRows').insertAdjacentHTML('beforeend', nextRowHtml(BRANDS_DESIGN[0],''));
+}
+function saveDesignPanel() {
+  const mid = currentPanel;
+  const brands=[]; document.querySelectorAll('#curBrandRows .brand-row').forEach(r=>{
+    const ins=r.querySelectorAll('input');
+    if(ins[0]?.value) brands.push({brand:ins[0].value,done:ins[1]?.value||'',wip:ins[2]?.value||''});
+  });
+  const nextBrands=[]; document.querySelectorAll('#nextBrandRows .brand-row').forEach(r=>{
+    const ins=r.querySelectorAll('input');
+    if(ins[0]?.value) nextBrands.push({brand:ins[0].value,done:ins[1]?.value||''});
+  });
+  setMemberData(mid, {brands, nextBrands, note: document.getElementById('designNote')?.value||''});
+  toast('저장 완료');
+}
+
+// ═══ LOCK SCREEN ═══
+let unlockedPanels = new Set();
+function openLocked(panelId) {
+  if (unlockedPanels.has(panelId)) { showPanel(panelId); if(panelId==='sum') buildSummary(); return; }
+  showPanel(panelId);
+  const lockEl = document.getElementById(panelId + 'Lock');
+  const contentEl = document.getElementById(panelId + 'Content');
+  contentEl.style.display = 'none';
+  lockEl.innerHTML = `
+    <div class="lock-screen">
+      <div class="lock-icon">🔒</div>
+      <h3>잠긴 페이지</h3>
+      <p>관리자만 접근할 수 있습니다.<br>비밀번호를 입력하세요.</p>
+      <div class="lock-input-row">
+        <input type="password" id="pwInput_${panelId}" placeholder="비밀번호" onkeydown="if(event.key==='Enter')unlock('${panelId}')">
+        <button class="btn-primary" onclick="unlock('${panelId}')">확인</button>
+      </div>
+      <div class="lock-error" id="pwErr_${panelId}"></div>
+    </div>`;
+}
+function unlock(panelId) {
+  const pw = document.getElementById('pwInput_' + panelId)?.value;
+  if (pw === ADMIN_PW) {
+    unlockedPanels.add(panelId);
+    document.getElementById(panelId + 'Lock').innerHTML = '';
+    document.getElementById(panelId + 'Content').style.display = '';
+    if (panelId === 'mgr') loadMgrContent();
+    if (panelId === 'sum') buildSummary();
+  } else {
+    document.getElementById('pwErr_' + panelId).textContent = '비밀번호가 틀렸습니다.';
+    setTimeout(()=>{ const el=document.getElementById('pwErr_'+panelId); if(el) el.textContent=''; }, 2000);
+  }
+}
+function loadMgrContent() {
+  const d = gw();
+  document.getElementById('mgrNote').value = d.mgrNote || '';
+  document.getElementById('mgrNext').value = d.mgrNext || '';
+}
+function saveMgr() {
+  sw2({ mgrNote: document.getElementById('mgrNote').value, mgrNext: document.getElementById('mgrNext').value });
+  toast('관리자 메모 저장 완료');
+}
+
+// ═══ SUMMARY ═══
+function buildSummary() {
+  document.getElementById('sumSubtitle').textContent = wRange();
+  const w = gw();
+  let totalSales = 0;
+  const salesLines = [];
+  let totalExp = 0;
+  const expLines = [];
+  const dsummary = {};
+
+  DB.members.forEach(m => {
+    const d = (w.members || {})[m.id] || {};
+    if (m.type === 'marketing') {
+      // New store-tab format
+      const customStores = d.customStores || [];
+      const allStores = [...STORES_FIXED, ...customStores];
+      const storeData = d.storeData || {};
+      allStores.forEach(s => {
+        const sd = storeData[s] || {};
+        const v = parseInt(sd.amt) || 0;
+        totalSales += v;
+        const orders = parseInt(sd.orders) || 0;
+        const memo = sd.memo ? ` (${sd.memo})` : '';
+        salesLines.push(`${s}: ${v.toLocaleString()}원, 발주 ${orders}건${memo}`);
+      });
+      (d.exp || []).forEach(e => { const q=parseInt(e.qty)||0; totalExp+=q; if(e.name) expLines.push(`${e.name} ${q}건 (${e.status})`); });
+    }
+    if (m.type === 'design' && m.status !== 'leave') {
+      (d.brands || []).forEach(b => {
+        if (!dsummary[b.brand]) dsummary[b.brand] = { done: 0, wip: 0, members: [] };
+        dsummary[b.brand].done += parseInt(b.done)||0;
+        dsummary[b.brand].wip += parseInt(b.wip)||0;
+      });
+    }
+  });
+
+  const totalDesign = Object.values(dsummary).reduce((a,v)=>a+v.done,0);
+
+  let html = `
+    <div id="exportTarget">
+    <div class="sum-header">
+      <div class="sum-title-block">
+        <div class="company">Team Weekly Report</div>
+        <div class="week">${wRange()} 주간 업무 보고서</div>
+      </div>
+      <div class="sum-badge-report">WEEKLY</div>
+    </div>
+
+    <div class="sum-stat-row">
+      <div class="sum-stat">
+        <div class="val">${totalSales > 0 ? totalSales.toLocaleString()+'원' : '—'}</div>
+        <div class="lbl">총 매출 합계</div>
+      </div>
+      <div class="sum-stat">
+        <div class="val">${totalExp > 0 ? totalExp+'건' : '—'}</div>
+        <div class="lbl">체험단 총 건수</div>
+      </div>
+      <div class="sum-stat">
+        <div class="val">${totalDesign > 0 ? totalDesign+'건' : '—'}</div>
+        <div class="lbl">디자인 완료</div>
+      </div>
+    </div>`;
+
+  // Marketing
+  const mktMember = DB.members.find(m=>m.type==='marketing');
+  const mktData = mktMember ? ((w.members||{})[mktMember.id]||{}) : {};
+  const customStores = mktData.customStores || [];
+  const allStores = [...STORES_FIXED, ...customStores];
+  const storeData = mktData.storeData || {};
+
+  html += `<div class="sum-section"><div class="sum-section-title">마케팅 — 스마트스토어 매출 (${mktMember?.name||'공수진'})</div>`;
+  html += `<table class="sum-table"><thead><tr><th>스토어</th><th style="width:110px;text-align:right">매출</th><th style="width:70px;text-align:center">발주</th></tr></thead><tbody>`;
+  allStores.forEach(s => {
+    const sd = storeData[s] || {};
+    const v = parseInt(sd.amt)||0;
+    const o = parseInt(sd.orders)||0;
+    html += `<tr><td>${s}</td><td style="text-align:right">${v.toLocaleString()}원</td><td style="text-align:center">${o}건</td></tr>`;
+  });
+  html += `<tr style="font-weight:600"><td>합계</td><td style="text-align:right">${totalSales.toLocaleString()}원</td><td></td></tr>`;
+  html += `</tbody></table></div>`;
+
+  if (expLines.length) {
+    html += `<div class="sum-section"><div class="sum-section-title">마케팅 — 체험단 현황</div><div class="sum-lines">${expLines.join('\n')}</div></div>`;
+  }
+
+  if (mktData.mktEtc) {
+    html += `<div class="sum-section"><div class="sum-section-title">마케팅 — 기타 업무</div><div class="sum-lines">${mktData.mktEtc}</div></div>`;
+  }
+
+  // Design
+  html += `<div class="sum-section"><div class="sum-section-title">디자인 — 이번 주 브랜드별 작업</div>`;
+  if (Object.keys(dsummary).length) {
+    html += `<table class="sum-table"><thead><tr><th>브랜드</th><th style="width:80px;text-align:center">완료</th><th style="width:80px;text-align:center">미작업</th></tr></thead><tbody>`;
+    Object.entries(dsummary).forEach(([b,v]) => {
+      html += `<tr><td>${b}</td><td style="text-align:center">${v.done}</td><td style="text-align:center">${v.wip}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  } else html += `<div class="sum-empty">입력된 데이터 없음</div>`;
+  html += `</div>`;
+
+  // Next week design
+  const designMembers = DB.members.filter(m=>m.type==='design'&&m.status!=='leave');
+  let nextHtml = '';
+  designMembers.forEach(m => {
+    const d = (w.members||{})[m.id]||{};
+    if (d.nextBrands && d.nextBrands.length) {
+      nextHtml += `<div class="sum-person-block"><div class="sum-person-name">${m.name}</div><div class="sum-person-items">${d.nextBrands.map(b=>`· ${b.brand}${b.done?` ${b.done}건`:''}`).join('<br>')}</div></div>`;
+    }
+  });
+  if (nextHtml) html += `<div class="sum-section"><div class="sum-section-title">디자인 — 다음 주 예정 작업</div>${nextHtml}</div>`;
+
+  // Mgr memo
+  if (w.mgrNote || w.mgrNext) {
+    html += `<div class="sum-section"><div class="sum-section-title">특이사항 / 일정</div>`;
+    if (w.mgrNote) html += `<div class="sum-lines" style="margin-bottom:.75rem">${w.mgrNote}</div>`;
+    if (w.mgrNext) html += `<div class="sum-section-title" style="margin-top:.5rem">다음 주 주요 일정</div><div class="sum-lines">${w.mgrNext}</div>`;
+    html += `</div>`;
+  }
+
+  html += `<div style="text-align:right;font-size:11px;color:var(--text-3);margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border)">생성일: ${new Date().toLocaleDateString('ko-KR')} · Team Report</div>
+  </div>`;
+
+  document.getElementById('sumExportCard').innerHTML = html;
+}
+
+// ═══ EXPORT ═══
+function copySummary() {
+  const w = gw();
+  let txt = `[${wRange()} 주간 업무 보고]\n\n`;
+  DB.members.forEach(m => {
+    const d = (w.members||{})[m.id]||{};
+    if (m.type==='marketing') {
+      txt += `■ 마케팅 (${m.name})\n[스마트스토어 매출]\n`;
+      const customStores = d.customStores || [];
+      const allStores = [...STORES_FIXED, ...customStores];
+      const storeData = d.storeData || {};
+      allStores.forEach(s => {
+        const sd = storeData[s] || {};
+        txt += `· ${s}: ${(parseInt(sd.amt)||0).toLocaleString()}원, 발주 ${parseInt(sd.orders)||0}건${sd.memo?' ('+sd.memo+')':''}\n`;
+      });
+      if(d.exp?.length){txt+='\n[체험단]\n';d.exp.forEach(e=>{if(e.name)txt+=`· ${e.name} ${e.qty}건 (${e.status})\n`;});}
+      if(d.mktEtc){txt+='\n[기타]\n'+d.mktEtc+'\n';}
+      txt+='\n';
+    }
+  });
+  txt += `■ 디자인 작업 현황\n`;
+  const ds={};
+  DB.members.filter(m=>m.type==='design'&&m.status!=='leave').forEach(m=>{
+    const d=(w.members||{})[m.id]||{};
+    (d.brands||[]).forEach(b=>{if(!ds[b.brand])ds[b.brand]={done:0,wip:0};ds[b.brand].done+=parseInt(b.done)||0;ds[b.brand].wip+=parseInt(b.wip)||0;});
+  });
+  Object.entries(ds).forEach(([b,v])=>{txt+=`· ${b}: 완료 ${v.done}건, 미작업 ${v.wip}건\n`;});
+  txt+='\n[다음 주 예정]\n';
+  DB.members.filter(m=>m.type==='design'&&m.status!=='leave').forEach(m=>{
+    const d=(w.members||{})[m.id]||{};
+    if(d.nextBrands?.length){txt+=`${m.name}: ${d.nextBrands.map(b=>b.brand+(b.done?` ${b.done}건`:'')).join(', ')}\n`;}
+  });
+  if(w.mgrNote||w.mgrNext){txt+=`\n■ 특이사항\n`;if(w.mgrNote)txt+=w.mgrNote+'\n';if(w.mgrNext)txt+='\n[다음 주]\n'+w.mgrNext+'\n';}
+  navigator.clipboard.writeText(txt).then(()=>toast('클립보드에 복사됐습니다')).catch(()=>toast('복사 실패'));
+}
+
+function downloadJpg() {
+  const el = document.getElementById('exportTarget');
+  if (!el) { toast('먼저 요약본을 열어주세요'); return; }
+  toast('JPG 생성 중...');
+  // 구글 폰트 등 외부 리소스 제외하고 캡처
+  html2canvas(el, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    useCORS: false,
+    allowTaint: true,
+    logging: false,
+    onclone: (doc) => {
+      // 폰트를 시스템 폰트로 교체해 렌더링 오류 방지
+      doc.body.style.fontFamily = 'sans-serif';
+    }
+  }).then(canvas => {
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const weekStr = wRange().replace(/[\/\s]/g, '-');
+      a.download = `주간보고_${weekStr}.jpg`;
+      a.href = url;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast('JPG 다운로드 완료');
+    }, 'image/jpeg', 0.92);
+  }).catch(e => { console.error(e); toast('다운로드 실패: ' + e.message); });
+}
+
+// ═══ ADD MEMBER ═══
+function buildColorPicker() {
+  const el = document.getElementById('colorPicker');
+  el.innerHTML = '';
+  COLORS.forEach((c, i) => {
+    const div = document.createElement('div');
+    div.className = 'color-opt' + (i===0?' sel':'');
+    div.style.background = c.bg;
+    div.style.border = `2px solid ${c.tx}`;
+    div.onclick = () => {
+      document.querySelectorAll('.color-opt').forEach(x=>x.classList.remove('sel'));
+      div.classList.add('sel');
+      selectedColor = c;
+    };
+    el.appendChild(div);
+  });
+  selectedColor = COLORS[0];
+}
+function openAddMember() {
+  document.getElementById('modalOverlay').classList.add('open');
+  document.getElementById('newName').value = '';
+  document.getElementById('newRole').value = '';
+  document.getElementById('newStatus').value = 'active';
+  buildColorPicker();
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+function addMember() {
+  const name = document.getElementById('newName').value.trim();
+  const role = document.getElementById('newRole').value.trim();
+  const status = document.getElementById('newStatus').value;
+  if (!name) { toast('이름을 입력하세요'); return; }
+  const id = 'mb_' + Date.now();
+  const type = role.includes('마케') ? 'marketing' : 'design';
+  DB.members.push({ id, name, role: role||'팀원', color: selectedColor, status, type });
+  save();
+  reloadAll();
+  closeModal();
+  toast(`${name}님이 추가됐습니다`);
+}
+
+// ═══ RELOAD ═══
+function reloadAll() {
+  document.getElementById('weekLbl').textContent = wRange();
+  buildMemberNav();
+  buildMemberPanels();
+  // Restore current panel
+  if (currentPanel) {
+    if (['mgr','sum'].includes(currentPanel)) {
+      if (unlockedPanels.has(currentPanel)) {
+        showPanel(currentPanel);
+        if(currentPanel==='mgr') loadMgrContent();
+        if(currentPanel==='sum') buildSummary();
+      } else { openLocked(currentPanel); }
+    } else {
+      const m = DB.members.find(x=>x.id===currentPanel);
+      if (m) { showPanel(currentPanel); loadMemberPanel(currentPanel); }
+      else { showFirstMember(); }
+    }
+  } else { showFirstMember(); }
+}
+function showFirstMember() {
+  const first = DB.members[0];
+  if (first) { showPanel(first.id); loadMemberPanel(first.id); }
+}
+
+// ═══ TOAST ═══
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.opacity = '1';
+  setTimeout(() => el.style.opacity='0', 2200);
+}
+
+// ═══ INIT ═══
+document.getElementById('weekLbl').textContent = wRange();
+buildColorPicker();
+
+// 구글 시트에서 팀원 불러오기
+fetch(`${API_URL}?action=getMembers`)
+  .then(r => r.json())
+  .then(res => {
+    if (res.ok && res.data.length) {
+      DB.members = res.data.map((m, i) => ({
+        id: m['ID'] || 'mb_'+i,
+        name: m['이름'] || '',
+        status: m['상태'] || 'active',
+        color: COLORS[i % COLORS.length],
+        type: (m['이름']==='공수진') ? 'marketing' : 'design'
+      }));
+      save();
+    }
+    buildMemberNav();
+    buildMemberPanels();
+    showFirstMember();
+  })
+  .catch(() => {
+    // API 실패시 로컬 데이터로 폴백
+    buildMemberNav();
+    buildMemberPanels();
+    showFirstMember();
+  });
+</script>
+</body>
+</html>
