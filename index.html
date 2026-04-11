@@ -1402,9 +1402,19 @@ fetch(`${API_URL}?action=getMembers`)
       }));
       save();
     }
+    buildMemberTabs();
+    buildMemberPanels();
+    buildWeekList();
+    updateWeekSelect();
     showPanel('notice');
   })
-  .catch(() => { showPanel('notice'); });
+  .catch(() => {
+    buildMemberTabs();
+    buildMemberPanels();
+    buildWeekList();
+    updateWeekSelect();
+    showPanel('notice');
+  });
 </script>
 </body>
 </html>
