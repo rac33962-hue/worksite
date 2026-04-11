@@ -1136,6 +1136,7 @@ function showFirstMember() { showReportPanel(); }
 // ═══ NOTICE ═══
 let noticeView = 'list';
 let noticeDetailId = null;
+let noticeEditId = null;
 
 function initNotice() {
   if (!DB.notices) DB.notices = [];
@@ -1187,10 +1188,11 @@ function renderNoticeList() {
 
 function renderNoticeWrite() {
   const el = document.getElementById('noticeContainer');
+  const editTarget = noticeEditId ? (DB.notices || []).find(n => n.id === noticeEditId) : null;
   el.innerHTML = `
     <div class="page-header" style="margin-bottom:1.5rem">
-      <button class="btn-secondary" style="margin-bottom:.75rem" onclick="noticeView='list';renderNoticeView()">← 목록</button>
-      <h2>공지 작성</h2>
+      <button class="btn-secondary" style="margin-bottom:.75rem" onclick="noticeEditId=null;noticeView='${noticeEditId ? 'detail' : 'list'}';renderNoticeView()">← ${noticeEditId ? '상세' : '목록'}</button>
+      <h2>${editTarget ? '공지 수정' : '공지 작성'}</h2>
     </div>
     <div class="card">
       <div style="margin-bottom:.75rem">
@@ -1203,11 +1205,11 @@ function renderNoticeWrite() {
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.5rem">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer">
-          <input type="checkbox" id="noticeImportant"> 중요 공지로 등록
+          <input type="checkbox" id="noticeImportant"${editTarget && editTarget.important ? ' checked' : ''}> 중요 공지로 등록
         </label>
         <div style="display:flex;gap:8px">
-          <button class="btn-secondary" onclick="noticeView='list';renderNoticeView()">취소</button>
-          <button class="btn-primary" onclick="submitNotice()">등록</button>
+          <button class="btn-secondary" onclick="noticeEditId=null;noticeView='list';renderNoticeView()">취소</button>
+          <button class="btn-primary" onclick="submitNotice()">저장</button>
         </div>
       </div>
     </div>`;
@@ -1228,6 +1230,11 @@ function renderNoticeWrite() {
         ]
       }
     });
+    // 수정 모드: 기존 내용 불러오기
+    if (editTarget) {
+      window._noticeQuill.root.innerHTML = editTarget.content || '';
+      document.getElementById('noticeTitle').value = editTarget.title || '';
+    }
     // 이미지 붙여넣기 (클립보드)
     document.getElementById('noticeEditor').addEventListener('paste', e => {
       const items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -1263,7 +1270,10 @@ function renderNoticeDetail() {
           </div>
           <div style="font-size:12px;color:var(--text-3)">${n.date}</div>
         </div>
-        <button class="btn-secondary" style="color:var(--red-tx);border-color:var(--red-tx);flex-shrink:0" onclick="deleteNotice(${n.id})">삭제</button>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn-secondary" onclick="noticeEditId=${n.id};noticeView='write';renderNoticeView()">수정</button>
+          <button class="btn-secondary" style="color:var(--red-tx);border-color:var(--red-tx)" onclick="deleteNotice(${n.id})">삭제</button>
+        </div>
       </div>
       <div class="notice-detail-content">${n.content || ''}</div>
     </div>`;
@@ -1275,12 +1285,24 @@ function submitNotice() {
   const important = document.getElementById('noticeImportant').checked;
   if (!title) { toast('제목을 입력해주세요'); return; }
   if (!DB.notices) DB.notices = [];
-  DB.notices.unshift({ id: Date.now(), title, content, important, date: new Date().toLocaleDateString('ko-KR') });
-  save();
-  window._noticeQuill = null;
-  noticeView = 'list';
-  renderNoticeView();
-  toast('공지가 등록됐습니다');
+  if (noticeEditId) {
+    const n = DB.notices.find(n => n.id === noticeEditId);
+    if (n) { n.title = title; n.content = content; n.important = important; }
+    noticeDetailId = noticeEditId;
+    noticeEditId = null;
+    save();
+    window._noticeQuill = null;
+    noticeView = 'detail';
+    renderNoticeView();
+    toast('공지가 수정됐습니다');
+  } else {
+    DB.notices.unshift({ id: Date.now(), title, content, important, date: new Date().toLocaleDateString('ko-KR') });
+    save();
+    window._noticeQuill = null;
+    noticeView = 'list';
+    renderNoticeView();
+    toast('공지가 등록됐습니다');
+  }
 }
 
 function deleteNotice(id) {
