@@ -107,6 +107,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 /* PANEL */
 .panel { display: none; }
 .panel.active { display: block; }
+.member-panel { display: none; }
+.member-panel.active { display: block; }
 
 /* LOCK SCREEN */
 .lock-screen { max-width: 360px; margin: 0 auto; padding-top: 3rem; text-align: center; }
@@ -159,6 +161,19 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 /* TOAST */
 #toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 9px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 200; white-space: nowrap; }
+
+/* WEEK ACCORDION */
+.acc-year { display:flex;align-items:center;justify-content:space-between;padding:.4rem 1rem;font-size:12px;font-weight:700;color:var(--text);cursor:pointer; }
+.acc-year:hover { background:var(--bg); }
+.acc-month { display:flex;align-items:center;justify-content:space-between;padding:.3rem 1.25rem;font-size:12px;color:var(--text-2);cursor:pointer; }
+.acc-month:hover { background:var(--bg); }
+.acc-week { padding:.25rem 1.75rem;font-size:12px;color:var(--text-3);cursor:pointer; }
+.acc-week:hover { color:var(--text);background:var(--bg); }
+.acc-week.active { color:var(--text);font-weight:500; }
+.acc-arrow { font-size:10px;transition:transform .2s; }
+.acc-arrow.open { transform:rotate(90deg); }
+.acc-children { display:none; }
+.acc-children.open { display:block; }
 
 /* MEMBER TABS */
 .member-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.5rem; }
@@ -213,9 +228,6 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     </div>
 
     <div class="nav-section">📋 주간보고</div>
-    <div class="nav-item" id="nav-newreport" onclick="showNewReport()">
-      <div class="nav-dot" style="background:#1a56a0"></div>+ 새 보고서 작성
-    </div>
     <div id="weekList"></div>
 
     <div class="nav-section" style="margin-top:.5rem">📢 공지사항</div>
@@ -425,29 +437,21 @@ function showPanel(id) {
   currentPanel = id;
 }
 
-function showNewReport() {
-  wOff = 0;
-  showReportPanel();
-}
 
 function onWeekSelect(val) {
-  // val = wKey string e.g. "2025-W15"
-  const allKeys = getSavedWeekKeys();
-  const idx = allKeys.indexOf(val);
-  wOff = 0;
-  // find offset
-  const target = val;
   let off = 0;
-  for (let i = -52; i <= 0; i++) {
-    if (wKey(i) === target) { off = i; break; }
+  for (let i = -104; i <= 52; i++) {
+    if (wKey(i) === val) { off = i; break; }
   }
   wOff = off;
+  // 활성 주차 하이라이트
+  document.querySelectorAll('.acc-week').forEach(el => el.classList.remove('active'));
+  document.getElementById('witem-' + val)?.classList.add('active');
   showReportPanel();
 }
 
 function showReportPanel() {
   showPanel('report');
-  document.getElementById('nav-newreport').classList.add('active');
   document.getElementById('reportWeekLabel').textContent = wRange();
   document.getElementById('reportTitle').textContent = `${wRange()} 주간 보고`;
   buildMemberTabs();
@@ -463,19 +467,85 @@ function showReportPanel() {
   }
 }
 
-function getSavedWeekKeys() {
-  return Object.keys(DB.weeks).sort().reverse();
+function wKeyToDate(k) {
+  // "2025-W15" → 해당 주 월요일 Date 반환
+  const [year, w] = k.split('-W').map(Number);
+  const jan4 = new Date(year, 0, 4);
+  const startOfWeek1 = new Date(jan4);
+  startOfWeek1.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1);
+  const mon = new Date(startOfWeek1);
+  mon.setDate(startOfWeek1.getDate() + (w - 1) * 7);
+  return mon;
+}
+
+function wKeyToMonthLabel(k) {
+  const d = wKeyToDate(k);
+  return `${d.getMonth()+1}월`;
+}
+
+function wKeyToWeekLabel(k) {
+  const d = wKeyToDate(k);
+  // 해당 월의 몇째 주인지
+  const weekOfMonth = Math.ceil(d.getDate() / 7);
+  return `${d.getMonth()+1}월 ${weekOfMonth}주차`;
 }
 
 function buildWeekList() {
   const el = document.getElementById('weekList');
   const keys = getSavedWeekKeys();
-  el.innerHTML = keys.map(k => {
-    const label = weekKeyToLabel(k);
-    return `<div class="nav-item" style="font-size:12px;padding:.35rem 1rem" onclick="onWeekSelect('${k}')">
-      <div class="nav-dot" style="background:#999;width:6px;height:6px"></div>${label}
-    </div>`;
-  }).join('');
+  const curKey = wKey();
+  const nextKey = wKey(1);
+  if (!keys.includes(nextKey)) keys.push(nextKey);
+  if (!keys.includes(curKey)) keys.push(curKey);
+
+  // 연도 → 월 → 주차 그룹핑
+  const tree = {};
+  keys.forEach(k => {
+    const d = wKeyToDate(k);
+    const y = d.getFullYear();
+    const mo = d.getMonth() + 1;
+    if (!tree[y]) tree[y] = {};
+    if (!tree[y][mo]) tree[y][mo] = [];
+    tree[y][mo].push(k);
+  });
+
+  let html = '';
+  Object.keys(tree).sort((a,b)=>b-a).forEach((year, yi) => {
+    const yOpen = yi === 0;
+    html += `<div>
+      <div class="acc-year" onclick="toggleAcc('y${year}')">
+        ${year}년 <span class="acc-arrow${yOpen?' open':''}" id="arr-y${year}">▶</span>
+      </div>
+      <div class="acc-children${yOpen?' open':''}" id="y${year}">`;
+    Object.keys(tree[year]).sort((a,b)=>b-a).forEach((mo, mi) => {
+      const mOpen = yi === 0 && mi === 0;
+      html += `<div>
+        <div class="acc-month" onclick="toggleAcc('m${year}_${mo}')">
+          ${mo}월 <span class="acc-arrow${mOpen?' open':''}" id="arr-m${year}_${mo}">▶</span>
+        </div>
+        <div class="acc-children${mOpen?' open':''}" id="m${year}_${mo}">`;
+      tree[year][mo].forEach(k => {
+        const isActive = k === curKey;
+        html += `<div class="acc-week${isActive?' active':''}" id="witem-${k}" onclick="onWeekSelect('${k}')">${wKeyToWeekLabel(k)}</div>`;
+      });
+      html += `</div></div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function toggleAcc(id) {
+  const el = document.getElementById(id);
+  const arr = document.getElementById('arr-' + id);
+  if (!el) return;
+  el.classList.toggle('open');
+  if (arr) arr.classList.toggle('open');
+}
+
+function getSavedWeekKeys() {
+  return Object.keys(DB.weeks).sort().reverse();
 }
 
 function updateWeekSelect() {
@@ -483,13 +553,11 @@ function updateWeekSelect() {
   const keys = getSavedWeekKeys();
   const curKey = wKey();
   if (!keys.includes(curKey)) keys.unshift(curKey);
-  sel.innerHTML = keys.map(k => `<option value="${k}"${k===curKey?' selected':''}>${weekKeyToLabel(k)}</option>`).join('');
+  sel.innerHTML = keys.map(k => `<option value="${k}"${k===curKey?' selected':''}>${wKeyToWeekLabel(k)}</option>`).join('');
 }
 
 function weekKeyToLabel(k) {
-  // "2025-W15" → "2025년 15주"
-  const parts = k.split('-W');
-  return parts.length === 2 ? `${parts[0]}년 ${parseInt(parts[1])}주` : k;
+  return wKeyToWeekLabel(k);
 }
 
 // ═══ MEMBER TABS ═══
