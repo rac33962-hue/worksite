@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <style>
 :root {
   --bg: #f7f6f3;
@@ -37,7 +39,7 @@ body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: va
 
 /* SIDEBAR */
 .sidebar-logo { padding: 1.5rem 1.25rem 1rem; border-bottom: 1px solid var(--border); }
-.sidebar-logo .brand { font-family: 'DM Serif Display', serif; font-size: 17px; color: var(--text); letter-spacing: -0.3px; }
+.sidebar-logo .brand { font-family: 'DM Serif Display', serif; font-size: 19px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
 .sidebar-logo .sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
 
 .week-nav { padding: .75rem 1rem; border-bottom: 1px solid var(--border); }
@@ -117,7 +119,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .notice-table tbody tr:last-child td { border-bottom:none; }
 .notice-row { cursor:pointer; transition:background .1s; }
 .notice-row:hover { background:var(--bg); }
-.notice-detail-content { font-size:14px; line-height:1.9; color:var(--text); white-space:pre-wrap; min-height:200px; }
+.notice-detail-content { font-size:14px; line-height:1.9; color:var(--text); min-height:200px; }
+.notice-detail-content img { max-width:100%; height:auto; border-radius:var(--radius); margin:.5rem 0; }
+.notice-detail-content table { border-collapse:collapse; width:100%; margin:.5rem 0; }
+.notice-detail-content td, .notice-detail-content th { border:1px solid var(--border-strong); padding:6px 10px; font-size:13px; }
 
 /* TASKS */
 .task-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: .75rem; }
@@ -240,7 +245,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
   <!-- SIDEBAR -->
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo">
-      <div class="brand">워크사이트</div>
+      <div class="brand">Worksite</div>
       <div class="sub">팀 워크사이트</div>
     </div>
 
@@ -1192,11 +1197,11 @@ function renderNoticeWrite() {
         <label class="field-label">제목</label>
         <input type="text" id="noticeTitle" placeholder="제목을 입력하세요" style="width:100%">
       </div>
-      <div style="margin-bottom:.75rem">
+      <div style="margin-bottom:1rem">
         <label class="field-label">내용</label>
-        <textarea id="noticeContent" placeholder="내용을 입력하세요" style="min-height:200px"></textarea>
+        <div id="noticeEditor" style="height:320px;background:#fff;border-radius:0 0 var(--radius) var(--radius)"></div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.5rem">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer">
           <input type="checkbox" id="noticeImportant"> 중요 공지로 등록
         </label>
@@ -1206,6 +1211,39 @@ function renderNoticeWrite() {
         </div>
       </div>
     </div>`;
+
+  setTimeout(() => {
+    window._noticeQuill = new Quill('#noticeEditor', {
+      theme: 'snow',
+      placeholder: '내용을 입력하세요...',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ color: [] }, { background: [] }],
+          [{ size: ['small', false, 'large', 'huge'] }],
+          [{ align: [] }],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['image', 'link'],
+          ['clean']
+        ]
+      }
+    });
+    // 이미지 붙여넣기 (클립보드)
+    document.getElementById('noticeEditor').addEventListener('paste', e => {
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const reader = new FileReader();
+          reader.onload = ev => {
+            const range = window._noticeQuill.getSelection(true);
+            window._noticeQuill.insertEmbed(range.index, 'image', ev.target.result);
+          };
+          reader.readAsDataURL(item.getAsFile());
+        }
+      }
+    });
+  }, 0);
 }
 
 function renderNoticeDetail() {
@@ -1233,12 +1271,13 @@ function renderNoticeDetail() {
 
 function submitNotice() {
   const title = document.getElementById('noticeTitle').value.trim();
-  const content = document.getElementById('noticeContent').value.trim();
+  const content = window._noticeQuill ? window._noticeQuill.root.innerHTML : '';
   const important = document.getElementById('noticeImportant').checked;
   if (!title) { toast('제목을 입력해주세요'); return; }
   if (!DB.notices) DB.notices = [];
   DB.notices.unshift({ id: Date.now(), title, content, important, date: new Date().toLocaleDateString('ko-KR') });
   save();
+  window._noticeQuill = null;
   noticeView = 'list';
   renderNoticeView();
   toast('공지가 등록됐습니다');
