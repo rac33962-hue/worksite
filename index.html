@@ -111,11 +111,13 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .member-panel.active { display: block; }
 
 /* NOTICE */
-.notice-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: .75rem; }
-.notice-card.notice-important { border-left: 3px solid var(--red-tx); }
-.notice-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.notice-title { font-size: 14px; font-weight: 600; color: var(--text); }
-.notice-body { font-size: 13px; color: var(--text-2); margin-top: .6rem; line-height: 1.6; }
+.notice-table { width:100%; border-collapse:collapse; }
+.notice-table th { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:.05em; padding:.75rem 1rem; border-bottom:1px solid var(--border); text-align:left; font-weight:600; }
+.notice-table td { padding:.85rem 1rem; border-bottom:1px solid var(--border); font-size:13px; color:var(--text); }
+.notice-table tbody tr:last-child td { border-bottom:none; }
+.notice-row { cursor:pointer; transition:background .1s; }
+.notice-row:hover { background:var(--bg); }
+.notice-detail-content { font-size:14px; line-height:1.9; color:var(--text); white-space:pre-wrap; min-height:200px; }
 
 /* TASKS */
 .task-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: .75rem; }
@@ -288,25 +290,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
     <!-- 공지사항 패널 -->
     <div id="panel-notice" class="panel">
-      <div class="page-header"><h2>공지사항</h2></div>
-      <div class="card" style="margin-bottom:1.5rem">
-        <div class="card-title">새 공지 작성</div>
-        <div style="margin-bottom:.75rem">
-          <label class="field-label">제목</label>
-          <input type="text" id="noticeTitle" placeholder="공지 제목을 입력하세요" style="width:100%">
-        </div>
-        <div style="margin-bottom:.75rem">
-          <label class="field-label">내용</label>
-          <textarea id="noticeContent" placeholder="공지 내용을 입력하세요" style="min-height:80px"></textarea>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer">
-            <input type="checkbox" id="noticeImportant"> 중요 공지
-          </label>
-          <button class="btn-primary" onclick="addNotice()">등록</button>
-        </div>
-      </div>
-      <div id="noticeList"></div>
+      <div id="noticeContainer"></div>
     </div>
 
     <!-- 업무일정관리 패널 -->
@@ -1145,12 +1129,109 @@ function reloadAll() {
 function showFirstMember() { showReportPanel(); }
 
 // ═══ NOTICE ═══
+let noticeView = 'list';
+let noticeDetailId = null;
+
 function initNotice() {
   if (!DB.notices) DB.notices = [];
-  renderNotices();
+  noticeView = 'list';
+  renderNoticeView();
 }
 
-function addNotice() {
+function renderNoticeView() {
+  if (noticeView === 'list') renderNoticeList();
+  else if (noticeView === 'write') renderNoticeWrite();
+  else if (noticeView === 'detail') renderNoticeDetail();
+}
+
+function renderNoticeList() {
+  const el = document.getElementById('noticeContainer');
+  const notices = DB.notices || [];
+  const sorted = [...notices].sort((a,b) => b.important - a.important || b.id - a.id);
+  let num = sorted.filter(n => !n.important).length;
+  el.innerHTML = `
+    <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+      <h2>공지사항</h2>
+      <button class="btn-primary" onclick="noticeView='write';renderNoticeView()">글쓰기</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="notice-table">
+        <thead>
+          <tr>
+            <th style="width:60px;text-align:center">번호</th>
+            <th>제목</th>
+            <th style="width:110px">날짜</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.length === 0
+            ? `<tr><td colspan="3" style="text-align:center;color:var(--text-3);padding:2.5rem">등록된 공지사항이 없습니다.</td></tr>`
+            : sorted.map(n => {
+                const rowNum = n.important ? '<span class="badge" style="background:var(--red-bg);color:var(--red-tx)">중요</span>' : num--;
+                return `<tr class="notice-row" onclick="noticeDetailId=${n.id};noticeView='detail';renderNoticeView()">
+                  <td style="text-align:center">${rowNum}</td>
+                  <td>${n.title}</td>
+                  <td style="color:var(--text-3);font-size:12px">${n.date}</td>
+                </tr>`;
+              }).join('')
+          }
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderNoticeWrite() {
+  const el = document.getElementById('noticeContainer');
+  el.innerHTML = `
+    <div class="page-header" style="margin-bottom:1.5rem">
+      <button class="btn-secondary" style="margin-bottom:.75rem" onclick="noticeView='list';renderNoticeView()">← 목록</button>
+      <h2>공지 작성</h2>
+    </div>
+    <div class="card">
+      <div style="margin-bottom:.75rem">
+        <label class="field-label">제목</label>
+        <input type="text" id="noticeTitle" placeholder="제목을 입력하세요" style="width:100%">
+      </div>
+      <div style="margin-bottom:.75rem">
+        <label class="field-label">내용</label>
+        <textarea id="noticeContent" placeholder="내용을 입력하세요" style="min-height:200px"></textarea>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer">
+          <input type="checkbox" id="noticeImportant"> 중요 공지로 등록
+        </label>
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" onclick="noticeView='list';renderNoticeView()">취소</button>
+          <button class="btn-primary" onclick="submitNotice()">등록</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderNoticeDetail() {
+  const el = document.getElementById('noticeContainer');
+  const n = (DB.notices || []).find(n => n.id === noticeDetailId);
+  if (!n) { noticeView = 'list'; renderNoticeView(); return; }
+  el.innerHTML = `
+    <div style="margin-bottom:1.5rem">
+      <button class="btn-secondary" onclick="noticeView='list';renderNoticeView()">← 목록</button>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:.4rem">
+            ${n.important ? '<span class="badge" style="background:var(--red-bg);color:var(--red-tx)">중요</span>' : ''}
+            <h2 style="font-size:18px">${n.title}</h2>
+          </div>
+          <div style="font-size:12px;color:var(--text-3)">${n.date}</div>
+        </div>
+        <button class="btn-secondary" style="color:var(--red-tx);border-color:var(--red-tx);flex-shrink:0" onclick="deleteNotice(${n.id})">삭제</button>
+      </div>
+      <div class="notice-detail-content">${n.content || ''}</div>
+    </div>`;
+}
+
+function submitNotice() {
   const title = document.getElementById('noticeTitle').value.trim();
   const content = document.getElementById('noticeContent').value.trim();
   const important = document.getElementById('noticeImportant').checked;
@@ -1158,41 +1239,17 @@ function addNotice() {
   if (!DB.notices) DB.notices = [];
   DB.notices.unshift({ id: Date.now(), title, content, important, date: new Date().toLocaleDateString('ko-KR') });
   save();
-  document.getElementById('noticeTitle').value = '';
-  document.getElementById('noticeContent').value = '';
-  document.getElementById('noticeImportant').checked = false;
-  renderNotices();
+  noticeView = 'list';
+  renderNoticeView();
   toast('공지가 등록됐습니다');
 }
 
 function deleteNotice(id) {
   DB.notices = DB.notices.filter(n => n.id !== id);
   save();
-  renderNotices();
-}
-
-function renderNotices() {
-  const el = document.getElementById('noticeList');
-  if (!DB.notices || DB.notices.length === 0) {
-    el.innerHTML = '<p style="color:var(--text-3);font-size:13px">등록된 공지사항이 없습니다.</p>';
-    return;
-  }
-  const sorted = [...DB.notices].sort((a,b) => b.important - a.important);
-  el.innerHTML = sorted.map(n => `
-    <div class="notice-card${n.important ? ' notice-important' : ''}">
-      <div class="notice-header">
-        <div style="display:flex;align-items:center;gap:8px">
-          ${n.important ? '<span class="badge" style="background:var(--red-bg);color:var(--red-tx)">중요</span>' : ''}
-          <span class="notice-title">${n.title}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;color:var(--text-3)">${n.date}</span>
-          <button class="btn-icon" onclick="deleteNotice(${n.id})">✕</button>
-        </div>
-      </div>
-      ${n.content ? `<div class="notice-body">${n.content.replace(/\n/g,'<br>')}</div>` : ''}
-    </div>
-  `).join('');
+  noticeView = 'list';
+  renderNoticeView();
+  toast('공지가 삭제됐습니다');
 }
 
 // ═══ TASKS ═══
