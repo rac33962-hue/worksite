@@ -329,7 +329,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     </div>
 
     <div class="sidebar-footer">
-      <button class="btn-add-member" onclick="openAddMember()">+ 신규 팀원 추가</button>
+      <button class="btn-add-member" onclick="openLocked('settings')">⚙ 설정</button>
     </div>
   </nav>
 
@@ -402,6 +402,14 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     <!-- 업무일정관리 패널 -->
     <div id="panel-tasks" class="panel">
       <div id="tasksContainer"></div>
+    </div>
+
+    <!-- 설정 패널 (locked) -->
+    <div id="panel-settings" class="panel">
+      <div id="settingsLock"></div>
+      <div id="settingsContent" style="display:none">
+        <div id="settingsContainer"></div>
+      </div>
     </div>
 
     <!-- MGR panel (locked) -->
@@ -1002,13 +1010,15 @@ function openLocked(panelId) {
 }
 function unlock(panelId) {
   const pw = document.getElementById('pwInput_' + panelId)?.value;
-  if (pw === ADMIN_PW) {
+  const activePw = localStorage.getItem('admin_pw') || ADMIN_PW;
+  if (pw === activePw) {
     unlockedPanels.add(panelId);
     document.getElementById(panelId + 'Lock').innerHTML = '';
     document.getElementById(panelId + 'Content').style.display = '';
     if (panelId === 'mgr') loadMgrContent();
     if (panelId === 'sum') buildSummary();
     if (panelId === 'ad') initAd();
+    if (panelId === 'settings') initSettings();
   } else {
     document.getElementById('pwErr_' + panelId).textContent = '비밀번호가 틀렸습니다.';
     setTimeout(()=>{ const el=document.getElementById('pwErr_'+panelId); if(el) el.textContent=''; }, 2000);
@@ -3469,6 +3479,261 @@ function deleteTask(id) {
   toast('업무가 삭제됐습니다');
 }
 
+// ═══ SETTINGS ═══
+let settingsTab = 'members';
+
+function initSettings() {
+  settingsTab = 'members';
+  renderSettings();
+}
+
+function renderSettings() {
+  const el = document.getElementById('settingsContainer');
+  const tabs = [
+    { id:'members', label:'팀원 관리' },
+    { id:'account', label:'비밀번호' },
+    { id:'app',     label:'앱 설정' },
+    { id:'data',    label:'데이터 백업' },
+  ];
+  el.innerHTML = `
+    <div class="page-header" style="margin-bottom:1.5rem">
+      <h2>⚙ 설정</h2>
+      <div class="subtitle">관리자 전용 — 변경사항은 즉시 저장됩니다</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:1.5rem;border-bottom:1px solid var(--border);padding-bottom:1rem">
+      ${tabs.map(t=>`<button class="${t.id===settingsTab?'btn-primary':'btn-secondary'}" style="font-size:13px" onclick="settingsTab='${t.id}';renderSettings()">${t.label}</button>`).join('')}
+    </div>
+    <div id="settingsTabContent"></div>`;
+  renderSettingsTab();
+}
+
+function renderSettingsTab() {
+  const el = document.getElementById('settingsTabContent');
+  if (settingsTab === 'members') renderSettingsMembers(el);
+  else if (settingsTab === 'account') renderSettingsAccount(el);
+  else if (settingsTab === 'app') renderSettingsApp(el);
+  else if (settingsTab === 'data') renderSettingsData(el);
+}
+
+// ── 팀원 관리 ──
+function renderSettingsMembers(el) {
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div style="font-size:13px;color:var(--text-2)">총 ${DB.members.length}명</div>
+      <button class="btn-primary" style="font-size:12px" onclick="openAddMember()">+ 팀원 추가</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--bg)">
+          ${['','이름','역할','상태','색상',''].map(h=>`<th style="padding:10px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-align:left;border-bottom:1px solid var(--border)">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${DB.members.map(m => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:10px 12px">
+                <div style="width:32px;height:32px;border-radius:50%;background:${m.color?.bg||'#eee'};color:${m.color?.tx||'#333'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${m.name[0]}</div>
+              </td>
+              <td style="padding:10px 12px;font-size:13px;font-weight:500">${m.name}</td>
+              <td style="padding:10px 12px;font-size:12px;color:var(--text-2)">${m.role||'—'}</td>
+              <td style="padding:10px 12px">
+                <span class="badge" style="background:${m.status==='leave'?'var(--amber-bg)':m.status==='inactive'?'var(--bg)':'var(--teal-bg)'};color:${m.status==='leave'?'var(--amber-tx)':m.status==='inactive'?'var(--text-3)':'var(--teal-tx)'}">${m.status==='leave'?'육아휴직':m.status==='inactive'?'비활성':'재직중'}</span>
+              </td>
+              <td style="padding:10px 12px">
+                <div style="width:18px;height:18px;border-radius:50%;background:${m.color?.bg||'#eee'};border:2px solid ${m.color?.tx||'#ccc'}"></div>
+              </td>
+              <td style="padding:10px 12px;text-align:right">
+                <div style="display:flex;gap:6px;justify-content:flex-end">
+                  <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="openEditMember('${m.id}')">수정</button>
+                  <button class="btn-secondary" style="font-size:11px;padding:4px 10px;color:var(--red-tx);border-color:var(--red-tx)" onclick="deleteMember('${m.id}')">삭제</button>
+                </div>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function deleteMember(id) {
+  const m = DB.members.find(m=>m.id===id);
+  if (!m) return;
+  if (!confirm(`"${m.name}"님을 삭제할까요?\n해당 팀원의 주간보고 데이터도 모두 삭제됩니다.`)) return;
+  DB.members = DB.members.filter(m=>m.id!==id);
+  // 주간보고 데이터에서도 제거
+  Object.values(DB.weeks||{}).forEach(w => { if(w.members) delete w.members[id]; });
+  save(); renderSettings(); toast(`"${m.name}"님이 삭제됐습니다`);
+}
+
+function openEditMember(id) {
+  const m = DB.members.find(m=>m.id===id);
+  if (!m) return;
+  window._editMemberId = id;
+  // 기존 addMember 모달 재활용
+  document.getElementById('modalOverlay').classList.add('open');
+  document.querySelector('#modalOverlay h3').textContent = '팀원 수정';
+  document.getElementById('newName').value = m.name;
+  document.getElementById('newRole').value = m.role||'';
+  document.getElementById('newStatus').value = m.status||'active';
+  buildColorPicker();
+  // 현재 색상 선택 표시
+  const idx = COLORS.findIndex(c=>c.bg===m.color?.bg);
+  if (idx>=0) {
+    selectedColor = COLORS[idx];
+    document.querySelectorAll('.color-opt').forEach((el,i)=>{el.classList.toggle('sel',i===idx);});
+  }
+  // 버튼을 "수정"으로 변경
+  document.querySelector('#modalOverlay .btn-primary').textContent = '저장';
+  document.querySelector('#modalOverlay .btn-primary').onclick = saveMemberEdit;
+}
+
+function saveMemberEdit() {
+  const id = window._editMemberId;
+  const m = DB.members.find(m=>m.id===id);
+  if (!m) return;
+  const name = document.getElementById('newName').value.trim();
+  if (!name) { toast('이름을 입력하세요'); return; }
+  m.name = name;
+  m.role = document.getElementById('newRole').value.trim();
+  m.status = document.getElementById('newStatus').value;
+  m.color = selectedColor;
+  m.type = m.role?.includes('마케') ? 'marketing' : 'design';
+  save();
+  window._editMemberId = null;
+  document.querySelector('#modalOverlay h3').textContent = '신규 팀원 추가';
+  document.querySelector('#modalOverlay .btn-primary').textContent = '추가';
+  document.querySelector('#modalOverlay .btn-primary').onclick = addMember;
+  closeModal();
+  renderSettings();
+  toast(`"${name}"님 정보가 수정됐습니다`);
+}
+
+// ── 비밀번호 변경 ──
+function renderSettingsAccount(el) {
+  el.innerHTML = `
+    <div class="card" style="max-width:420px">
+      <div class="card-title">관리자 비밀번호 변경</div>
+      <div style="margin-bottom:.75rem">
+        <label class="field-label">현재 비밀번호</label>
+        <input type="password" id="pwCurrent" placeholder="현재 비밀번호" style="width:100%">
+      </div>
+      <div style="margin-bottom:.75rem">
+        <label class="field-label">새 비밀번호</label>
+        <input type="password" id="pwNew" placeholder="새 비밀번호" style="width:100%">
+      </div>
+      <div style="margin-bottom:1rem">
+        <label class="field-label">새 비밀번호 확인</label>
+        <input type="password" id="pwConfirm" placeholder="새 비밀번호 재입력" style="width:100%">
+      </div>
+      <button class="btn-primary" onclick="changeAdminPw()">비밀번호 변경</button>
+    </div>`;
+}
+
+function changeAdminPw() {
+  const cur = document.getElementById('pwCurrent').value;
+  const nw = document.getElementById('pwNew').value;
+  const cf = document.getElementById('pwConfirm').value;
+  const storedPw = localStorage.getItem('admin_pw') || ADMIN_PW;
+  if (cur !== storedPw) { toast('현재 비밀번호가 틀렸습니다'); return; }
+  if (!nw) { toast('새 비밀번호를 입력해주세요'); return; }
+  if (nw !== cf) { toast('새 비밀번호가 일치하지 않습니다'); return; }
+  localStorage.setItem('admin_pw', nw);
+  document.getElementById('pwCurrent').value='';
+  document.getElementById('pwNew').value='';
+  document.getElementById('pwConfirm').value='';
+  toast('비밀번호가 변경됐습니다');
+}
+
+// ── 앱 설정 ──
+function renderSettingsApp(el) {
+  const brand = localStorage.getItem('app_brand') || 'Worksite';
+  const sub = localStorage.getItem('app_sub') || '팀 워크사이트';
+  el.innerHTML = `
+    <div class="card" style="max-width:420px">
+      <div class="card-title">앱 이름 설정</div>
+      <div style="margin-bottom:.75rem">
+        <label class="field-label">브랜드명</label>
+        <input type="text" id="appBrand" value="${brand}" placeholder="Worksite" style="width:100%">
+      </div>
+      <div style="margin-bottom:1rem">
+        <label class="field-label">서브타이틀</label>
+        <input type="text" id="appSub" value="${sub}" placeholder="팀 워크사이트" style="width:100%">
+      </div>
+      <button class="btn-primary" onclick="saveAppSettings()">저장</button>
+    </div>`;
+}
+
+function applyAppSettings() {
+  const brand = localStorage.getItem('app_brand');
+  const sub = localStorage.getItem('app_sub');
+  if (brand) { document.querySelector('.sidebar-logo .brand').textContent = brand; document.title = brand; }
+  if (sub) document.querySelector('.sidebar-logo .sub').textContent = sub;
+}
+
+function saveAppSettings() {
+  const brand = document.getElementById('appBrand').value.trim() || 'Worksite';
+  const sub = document.getElementById('appSub').value.trim() || '팀 워크사이트';
+  localStorage.setItem('app_brand', brand);
+  localStorage.setItem('app_sub', sub);
+  document.querySelector('.sidebar-logo .brand').textContent = brand;
+  document.querySelector('.sidebar-logo .sub').textContent = sub;
+  document.title = brand;
+  toast('앱 설정이 저장됐습니다');
+}
+
+// ── 데이터 백업 ──
+function renderSettingsData(el) {
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:640px">
+      <div class="card">
+        <div class="card-title">데이터 내보내기</div>
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:1rem;line-height:1.6">전체 데이터를 JSON 파일로 저장합니다.<br>정기적으로 백업해두세요.</div>
+        <button class="btn-primary btn-full" onclick="exportData()">⬇ JSON 다운로드</button>
+      </div>
+      <div class="card">
+        <div class="card-title">데이터 복원</div>
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:1rem;line-height:1.6">백업한 JSON 파일을 불러와 복원합니다.<br><strong style="color:var(--red-tx)">기존 데이터는 덮어씌워집니다.</strong></div>
+        <label class="btn-secondary btn-full" style="display:block;text-align:center;cursor:pointer">
+          ⬆ JSON 불러오기
+          <input type="file" accept=".json" style="display:none" onchange="importData(this)">
+        </label>
+      </div>
+    </div>`;
+}
+
+function exportData() {
+  const json = JSON.stringify(DB, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toISOString().slice(0,10);
+  a.download = `worksite_backup_${date}.json`;
+  a.href = url;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('백업 파일이 다운로드됐습니다');
+}
+
+function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.members) { toast('올바른 백업 파일이 아닙니다'); return; }
+      if (!confirm('데이터를 복원하면 현재 데이터가 모두 덮어씌워집니다.\n계속하시겠습니까?')) return;
+      DB = data;
+      save();
+      buildMemberTabs();
+      buildMemberPanels();
+      buildBoardNav();
+      renderSettings();
+      toast('데이터가 복원됐습니다');
+    } catch { toast('파일을 읽을 수 없습니다'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
 // ═══ TOAST ═══
 function toast(msg) {
   const el = document.getElementById('toast');
@@ -3494,12 +3759,14 @@ fetch(`${API_URL}?action=getMembers`)
     buildMemberTabs();
     buildMemberPanels();
     buildBoardNav();
+    applyAppSettings();
     showPanel('notice');
   })
   .catch(() => {
     buildMemberTabs();
     buildMemberPanels();
     buildBoardNav();
+    applyAppSettings();
     showPanel('notice');
   });
 </script>
