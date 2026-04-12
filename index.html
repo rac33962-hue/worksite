@@ -294,10 +294,14 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
       <div class="sub">팀 워크사이트</div>
     </div>
 
-    <div class="nav-section">📢 공지사항</div>
+    <div class="nav-section" style="display:flex;align-items:center;justify-content:space-between">
+      <span>📢 게시판</span>
+      <span style="cursor:pointer;font-size:16px;color:var(--text-3);line-height:1;padding:0 2px" onclick="openAddBoard()" title="게시판 추가">+</span>
+    </div>
     <div class="nav-item" id="nav-notice" onclick="showPanel('notice')">
       <div class="nav-dot" style="background:#0e6b50"></div>공지사항
     </div>
+    <div id="boardNavList"></div>
 
     <div class="nav-section" style="margin-top:.5rem">📁 업무일정</div>
     <div class="nav-item" id="nav-tasks" onclick="showPanel('tasks')">
@@ -363,6 +367,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     <!-- 공지사항 패널 -->
     <div id="panel-notice" class="panel">
       <div id="noticeContainer"></div>
+    </div>
+
+    <!-- 커스텀 게시판 패널 (공용) -->
+    <div id="panel-board" class="panel">
+      <div id="boardContainer"></div>
     </div>
 
     <!-- 인스타그램 패널 -->
@@ -467,6 +476,25 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeModal()">취소</button>
       <button class="btn-primary" onclick="addMember()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 게시판 추가 모달 -->
+<div class="modal-overlay" id="boardModalOverlay" onclick="if(event.target===this)closeBoardModal()">
+  <div class="modal">
+    <h3 id="boardModalTitle">게시판 추가</h3>
+    <div class="modal-field">
+      <label>게시판 이름</label>
+      <input type="text" id="boardName" placeholder="예: 자료실, 교육자료, 업무공유" maxlength="20" onkeydown="if(event.key==='Enter')confirmAddBoard()">
+    </div>
+    <div class="modal-field">
+      <label>색상</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="boardColorPicker"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeBoardModal()">취소</button>
+      <button class="btn-primary" onclick="confirmAddBoard()">추가</button>
     </div>
   </div>
 </div>
@@ -2774,6 +2802,241 @@ function renderDashboard() {
   `;
 }
 
+// ═══ BOARD ═══
+const BOARD_COLORS = [
+  {bg:'#e8f0fe',tx:'#1a56a0',dot:'#1a56a0'},
+  {bg:'#e0f5ee',tx:'#0e6b50',dot:'#0e6b50'},
+  {bg:'#fde8f0',tx:'#992248',dot:'#992248'},
+  {bg:'#fef3e0',tx:'#8a520a',dot:'#ba7517'},
+  {bg:'#eeeefe',tx:'#4a3fb5',dot:'#4a3fb5'},
+  {bg:'#fde8e8',tx:'#a02020',dot:'#a02020'},
+  {bg:'#f0ede8',tx:'#4a4030',dot:'#888'},
+];
+let selectedBoardColor = 0;
+let currentBoardId = null;
+let boardView = 'list';
+let boardDetailId = null;
+let boardEditId = null;
+
+function buildBoardNav() {
+  const el = document.getElementById('boardNavList');
+  if (!el) return;
+  const boards = DB.boards || [];
+  el.innerHTML = boards.map(b => `
+    <div class="nav-item" id="nav-board-${b.id}" onclick="openBoard(${b.id})" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="nav-dot" style="background:${b.color?.dot||'#888'}"></div>${b.name}
+      </div>
+      <span class="btn-icon" style="font-size:11px;color:var(--text-3);margin-left:auto;padding:2px 4px" onclick="event.stopPropagation();deleteBoardConfirm(${b.id})">✕</span>
+    </div>`).join('');
+}
+
+function openBoard(id) {
+  currentBoardId = id;
+  boardView = 'list';
+  boardDetailId = null;
+  boardEditId = null;
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-board')?.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('nav-board-'+id)?.classList.add('active');
+  currentPanel = 'board';
+  renderBoardView();
+}
+
+function renderBoardView() {
+  if (boardView === 'list') renderBoardList();
+  else if (boardView === 'write') renderBoardWrite();
+  else if (boardView === 'detail') renderBoardDetail();
+}
+
+function renderBoardList() {
+  const el = document.getElementById('boardContainer');
+  const board = (DB.boards||[]).find(b=>b.id===currentBoardId);
+  if (!board) return;
+  const posts = (DB.boardPosts||{})[currentBoardId] || [];
+  const sorted = [...posts].sort((a,b)=>b.important-a.important||b.id-a.id);
+  let num = sorted.filter(p=>!p.important).length;
+  const bc = board.color || BOARD_COLORS[0];
+  el.innerHTML = `
+    <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:12px;height:12px;border-radius:50%;background:${bc.dot||'#888'};flex-shrink:0"></div>
+        <h2>${board.name}</h2>
+      </div>
+      <button class="btn-primary" onclick="boardView='write';boardEditId=null;renderBoardView()">글쓰기</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="notice-table">
+        <thead><tr>
+          <th style="width:60px;text-align:center">번호</th>
+          <th>제목</th>
+          <th style="width:110px">날짜</th>
+        </tr></thead>
+        <tbody>
+          ${sorted.length === 0
+            ? `<tr><td colspan="3" style="text-align:center;color:var(--text-3);padding:2.5rem">게시글이 없습니다.</td></tr>`
+            : sorted.map(p => {
+                const rowNum = p.important
+                  ? `<span class="badge" style="background:var(--red-bg);color:var(--red-tx)">중요</span>`
+                  : num--;
+                return `<tr class="notice-row" onclick="boardDetailId=${p.id};boardView='detail';renderBoardView()">
+                  <td style="text-align:center">${rowNum}</td>
+                  <td>${p.title}</td>
+                  <td style="color:var(--text-3);font-size:12px">${p.date}</td>
+                </tr>`;
+              }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderBoardWrite() {
+  const el = document.getElementById('boardContainer');
+  const board = (DB.boards||[]).find(b=>b.id===currentBoardId);
+  if (!board) return;
+  const editTarget = boardEditId ? ((DB.boardPosts||{})[currentBoardId]||[]).find(p=>p.id===boardEditId) : null;
+  el.innerHTML = `
+    <div class="page-header" style="margin-bottom:1.5rem">
+      <button class="btn-secondary" style="margin-bottom:.75rem" onclick="boardEditId=null;boardView='${boardEditId?'detail':'list'}';renderBoardView()">← ${boardEditId?'상세':'목록'}</button>
+      <h2>${editTarget?'글 수정':'글쓰기'}</h2>
+    </div>
+    <div class="card">
+      <div style="margin-bottom:.75rem">
+        <label class="field-label">제목</label>
+        <input type="text" id="boardPostTitle" placeholder="제목을 입력하세요" style="width:100%" value="${editTarget?editTarget.title:''}">
+      </div>
+      <div style="margin-bottom:1rem">
+        <label class="field-label">내용</label>
+        <div id="boardPostEditor" style="height:320px;background:#fff;border-radius:0 0 var(--radius) var(--radius)"></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.5rem">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer">
+          <input type="checkbox" id="boardPostImportant"${editTarget&&editTarget.important?' checked':''}> 중요 공지로 등록
+        </label>
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" onclick="boardEditId=null;boardView='list';renderBoardView()">취소</button>
+          <button class="btn-primary" onclick="submitBoardPost()">저장</button>
+        </div>
+      </div>
+    </div>`;
+
+  setTimeout(() => {
+    window._boardQuill = new Quill('#boardPostEditor', {
+      theme: 'snow',
+      placeholder: '내용을 입력하세요...',
+      modules: { toolbar: [['bold','italic','underline','strike'],[{color:[]},{background:[]}],[{size:['small',false,'large','huge']}],[{align:[]}],[{list:'ordered'},{list:'bullet'}],['image','link'],['clean']] }
+    });
+    if (editTarget) window._boardQuill.root.innerHTML = editTarget.content || '';
+    document.getElementById('boardPostEditor').addEventListener('paste', ev => {
+      const items = (ev.clipboardData||ev.originalEvent.clipboardData).items;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          ev.preventDefault();
+          const reader = new FileReader();
+          reader.onload = re => { const range=window._boardQuill.getSelection(true); window._boardQuill.insertEmbed(range.index,'image',re.target.result); };
+          reader.readAsDataURL(item.getAsFile());
+        }
+      }
+    });
+  }, 0);
+}
+
+function renderBoardDetail() {
+  const el = document.getElementById('boardContainer');
+  const posts = (DB.boardPosts||{})[currentBoardId] || [];
+  const p = posts.find(p=>p.id===boardDetailId);
+  if (!p) { boardView='list'; renderBoardView(); return; }
+  el.innerHTML = `
+    <div style="margin-bottom:1.5rem">
+      <button class="btn-secondary" onclick="boardView='list';renderBoardView()">← 목록</button>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:.4rem">
+            ${p.important?`<span class="badge" style="background:var(--red-bg);color:var(--red-tx)">중요</span>`:''}
+            <h2 style="font-size:17px">${p.title}</h2>
+          </div>
+          <div style="font-size:12px;color:var(--text-3)">${p.date}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn-secondary" onclick="boardEditId=${p.id};boardView='write';renderBoardView()">수정</button>
+          <button class="btn-secondary" style="color:var(--red-tx);border-color:var(--red-tx)" onclick="deleteBoardPost(${p.id})">삭제</button>
+        </div>
+      </div>
+      <div class="notice-detail-content">${p.content||'<span style="color:var(--text-3)">내용 없음</span>'}</div>
+    </div>`;
+}
+
+function submitBoardPost() {
+  const title = document.getElementById('boardPostTitle').value.trim();
+  const content = window._boardQuill ? window._boardQuill.root.innerHTML : '';
+  const important = document.getElementById('boardPostImportant').checked;
+  if (!title) { toast('제목을 입력해주세요'); return; }
+  if (!DB.boardPosts) DB.boardPosts = {};
+  if (!DB.boardPosts[currentBoardId]) DB.boardPosts[currentBoardId] = [];
+  const today = new Date().toLocaleDateString('ko-KR', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\.\s*/g,'.').replace(/\.$/, '');
+  if (boardEditId) {
+    const p = DB.boardPosts[currentBoardId].find(p=>p.id===boardEditId);
+    if (p) { p.title=title; p.content=content; p.important=important; }
+    boardDetailId = boardEditId;
+    boardEditId = null;
+    save(); window._boardQuill=null; boardView='detail'; renderBoardView();
+    toast('수정됐습니다');
+  } else {
+    DB.boardPosts[currentBoardId].unshift({id:Date.now(),title,content,important,date:today});
+    save(); window._boardQuill=null; boardView='list'; renderBoardView();
+    toast('등록됐습니다');
+  }
+}
+
+function deleteBoardPost(id) {
+  if (!confirm('게시글을 삭제할까요?')) return;
+  DB.boardPosts[currentBoardId] = (DB.boardPosts[currentBoardId]||[]).filter(p=>p.id!==id);
+  save(); boardView='list'; renderBoardView(); toast('삭제됐습니다');
+}
+
+function deleteBoardConfirm(id) {
+  const board = (DB.boards||[]).find(b=>b.id===id);
+  if (!board) return;
+  if (!confirm(`"${board.name}" 게시판을 삭제할까요?\n게시글도 모두 삭제됩니다.`)) return;
+  DB.boards = (DB.boards||[]).filter(b=>b.id!==id);
+  if (DB.boardPosts) delete DB.boardPosts[id];
+  save(); buildBoardNav();
+  if (currentBoardId === id) { currentBoardId=null; showPanel('notice'); }
+  toast(`"${board.name}" 게시판이 삭제됐습니다`);
+}
+
+// 게시판 모달
+function openAddBoard() {
+  selectedBoardColor = 0;
+  document.getElementById('boardName').value = '';
+  buildBoardColorPicker();
+  document.getElementById('boardModalOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('boardName').focus(), 100);
+}
+
+function closeBoardModal() {
+  document.getElementById('boardModalOverlay').classList.remove('open');
+}
+
+function buildBoardColorPicker() {
+  const el = document.getElementById('boardColorPicker');
+  el.innerHTML = BOARD_COLORS.map((c,i)=>`
+    <div onclick="selectedBoardColor=${i};buildBoardColorPicker()"
+      style="width:22px;height:22px;border-radius:50%;background:${c.dot};cursor:pointer;border:2px solid ${i===selectedBoardColor?'var(--text)':'transparent'};transition:border-color .1s"></div>`).join('');
+}
+
+function confirmAddBoard() {
+  const name = document.getElementById('boardName').value.trim();
+  if (!name) { toast('게시판 이름을 입력해주세요'); return; }
+  if (!DB.boards) DB.boards = [];
+  DB.boards.push({ id: Date.now(), name, color: BOARD_COLORS[selectedBoardColor] });
+  save(); buildBoardNav(); closeBoardModal();
+  toast(`"${name}" 게시판이 추가됐습니다`);
+}
+
 // ═══ NOTICE ═══
 let noticeView = 'list';
 let noticeDetailId = null;
@@ -3182,6 +3445,7 @@ fetch(`${API_URL}?action=getMembers`)
     buildMemberPanels();
     buildWeekList();
     updateWeekSelect();
+    buildBoardNav();
     showPanel('home');
   })
   .catch(() => {
@@ -3189,6 +3453,7 @@ fetch(`${API_URL}?action=getMembers`)
     buildMemberPanels();
     buildWeekList();
     updateWeekSelect();
+    buildBoardNav();
     showPanel('home');
   });
 </script>
