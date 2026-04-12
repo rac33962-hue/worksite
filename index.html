@@ -274,6 +274,14 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
   .main { margin-left: 0; padding: 1rem; }
   .sum-stat-row { grid-template-columns: 1fr 1fr; }
 }
+@media print {
+  .sidebar, .btn-secondary, .btn-primary, button { display: none !important; }
+  .main { margin-left: 0 !important; padding: 1rem !important; }
+  .panel { display: block !important; }
+  .panel:not(.active) { display: none !important; }
+  #adReportPrintArea { box-shadow: none !important; border: none !important; }
+  body { background: #fff !important; }
+}
 </style>
 </head>
 <body>
@@ -300,11 +308,20 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     </div>
 
     <div class="nav-section" style="margin-top:.5rem">📊 광고</div>
+    <div class="nav-item" id="nav-insta" onclick="showPanel('insta')">
+      <div class="nav-dot" style="background:#992248"></div>인스타그램
+    </div>
+    <div class="nav-item" id="nav-naver" onclick="showPanel('naver')">
+      <div class="nav-dot" style="background:#1a56a0"></div>네이버
+    </div>
+    <div class="nav-item" id="nav-kakao" onclick="showPanel('kakao')">
+      <div class="nav-dot" style="background:#ba7517"></div>카카오
+    </div>
     <div class="nav-item" id="nav-adreport" onclick="showPanel('adreport')">
-      <div class="nav-dot" style="background:#ba7517"></div>광고보고서
+      <div class="nav-dot" style="background:#0e6b50"></div>통합보고서
     </div>
     <div class="nav-item locked" id="nav-ad" onclick="openLocked('ad')">
-      <div class="nav-dot" style="background:#992248"></div>AI 광고분석
+      <div class="nav-dot" style="background:#4a3fb5"></div>AI 광고분석
     </div>
 
     <div class="nav-section" style="margin-top:.5rem">관리자</div>
@@ -348,7 +365,22 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
       <div id="noticeContainer"></div>
     </div>
 
-    <!-- 광고보고서 패널 -->
+    <!-- 인스타그램 패널 -->
+    <div id="panel-insta" class="panel">
+      <div id="instaContainer"></div>
+    </div>
+
+    <!-- 네이버 패널 -->
+    <div id="panel-naver" class="panel">
+      <div id="naverContainer"></div>
+    </div>
+
+    <!-- 카카오 패널 -->
+    <div id="panel-kakao" class="panel">
+      <div id="kakaoContainer"></div>
+    </div>
+
+    <!-- 통합보고서 패널 -->
     <div id="panel-adreport" class="panel">
       <div id="adReportContainer"></div>
     </div>
@@ -532,6 +564,9 @@ function showPanel(id) {
   if (id === 'home') initDashboard();
   if (id === 'notice') initNotice();
   if (id === 'tasks') initTasks();
+  if (id === 'insta') initInsta();
+  if (id === 'naver') initNaver();
+  if (id === 'kakao') initKakao();
   if (id === 'adreport') initAdReport();
 }
 
@@ -1172,11 +1207,577 @@ function reloadAll() {
 }
 function showFirstMember() { showReportPanel(); }
 
-// ═══ AD REPORT ═══
+// ═══ CHANNEL HELPERS ═══
+// 공통: 매체별 월 목록 렌더 (인스타/네이버/카카오 공용)
+function makeChannelModule(opts) {
+  // opts: { key, label, color, containerId, renderWrite, renderDetail, calcTotal }
+  const key = opts.key; // 'instaReports' | 'naverReports' | 'kakaoReports'
+  const state = { view: 'list', detailId: null, editId: null, year: new Date().getFullYear() };
+
+  function getEl() { return document.getElementById(opts.containerId); }
+
+  function renderView() {
+    if (state.view === 'list') renderList();
+    else if (state.view === 'write') opts.renderWrite(state, save2, renderView, getEl);
+    else if (state.view === 'detail') renderDetail();
+  }
+
+  function renderList() {
+    const el = getEl();
+    const all = DB[key] || [];
+    const years = [...new Set(all.map(r => r.month?.slice(0,4)))].sort((a,b)=>b-a);
+    if (!years.includes(String(state.year))) state.year = years[0] || new Date().getFullYear();
+    const filtered = all.filter(r => r.month?.startsWith(state.year+'-'))
+      .sort((a,b) => b.month.localeCompare(a.month));
+
+    const months = Array.from({length:12},(_,i)=>i+1);
+    const existing = new Set(filtered.map(r=>r.month));
+
+    el.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+        <div><h2 style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${opts.color}"></span>${opts.label}</h2>
+          <div class="subtitle">월별 광고 집행 내역</div></div>
+        <button class="btn-primary" onclick="window._ch_${key}.newEntry()">+ 월 데이터 추가</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.25rem">
+        ${(years.length ? years : [new Date().getFullYear()]).map(y=>`
+          <button class="${y==state.year?'btn-primary':'btn-secondary'}" style="padding:5px 14px;font-size:12px"
+            onclick="window._ch_${key}.setYear(${y})">${y}년</button>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem">
+        ${months.map(m => {
+          const preset = `${state.year}-${String(m).padStart(2,'0')}`;
+          const r = filtered.find(r=>r.month===preset);
+          const total = r ? (opts.calcTotal ? opts.calcTotal(r) : 0) : 0;
+          return `<div class="card" style="padding:1rem;cursor:pointer;border:1px solid var(--border);transition:box-shadow .15s${r?'':';opacity:.45'}"
+            onclick="${r?`window._ch_${key}.openDetail(${r.id})`:`window._ch_${key}.newEntry('${preset}')`}"
+            onmouseenter="this.style.boxShadow='0 4px 14px rgba(0,0,0,0.09)'" onmouseleave="this.style.boxShadow=''">
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:.25rem">${m}월</div>
+            ${r
+              ? `<div style="font-size:15px;font-weight:700;color:var(--text)">${total>0?total.toLocaleString()+'원':'입력됨'}</div>
+                 <div style="font-size:11px;color:var(--text-3);margin-top:2px">${r.date||''}</div>`
+              : `<div style="font-size:13px;color:var(--text-3)">미입력</div>`
+            }
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  function renderDetail() {
+    opts.renderDetail(state, DB[key], save2, renderView, getEl);
+  }
+
+  function save2() { save(); }
+
+  return {
+    init() { if(!DB[key]) DB[key]=[]; state.view='list'; renderView(); },
+    setYear(y) { state.year=y; renderView(); },
+    newEntry(preset) {
+      state.editId=null;
+      state.view='write';
+      state._preset=preset||`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+      renderView();
+    },
+    openDetail(id) { state.detailId=id; state.view='detail'; renderView(); },
+    openEdit(id) { state.editId=id; state.view='write'; renderView(); },
+    goList() { state.view='list'; renderView(); },
+    goDetail() { state.view='detail'; renderView(); },
+    deleteEntry(id) {
+      if(!confirm('삭제할까요?')) return;
+      DB[key]=(DB[key]||[]).filter(r=>r.id!==id);
+      save(); state.view='list'; renderView(); toast('삭제됐습니다');
+    }
+  };
+}
+
+// ═══ INSTAGRAM ═══
+function initInsta() {
+  if (!window._ch_instaReports) window._ch_instaReports = makeChannelModule({
+    key: 'instaReports', label: '인스타그램 광고', color: '#992248',
+    containerId: 'instaContainer',
+    calcTotal: r => (r.accounts||[]).reduce((sum,acc) => {
+      const v = acc.summary?.totalKRW?.replace(/[^0-9]/g,'');
+      return sum + (parseInt(v)||0);
+    }, 0),
+    renderWrite: renderInstaWrite,
+    renderDetail: renderInstaDetail
+  });
+  window._ch_instaReports.init();
+}
+
+function renderInstaWrite(state, save2, renderView, getEl) {
+  const e = state.editId ? (DB.instaReports||[]).find(r=>r.id===state.editId) : null;
+  const preset = e ? e.month : (state._preset || '');
+  const accounts = e ? JSON.parse(JSON.stringify(e.accounts||[{name:'',summary:{},ads:[]}])) : [{name:'',summary:{},ads:[]}];
+  window._instaWriteState = { accounts, preset };
+
+  function buildAccountsHtml() {
+    return accounts.map((acc,ai) => `
+      <div class="ar-insta-account card" style="margin-bottom:.75rem;padding:1rem" data-ai="${ai}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+          <input type="text" placeholder="계정명 (예: 나인원코스메디)" class="ar-insta-acc-name" style="font-weight:600;font-size:13px;flex:1;margin-right:8px" value="${acc.name||''}">
+          ${accounts.length>1?`<button class="btn-icon" style="color:var(--red-tx)" onclick="instaRemoveAccount(${ai})">✕</button>`:''}
+        </div>
+        <div style="margin-bottom:.5rem">
+          <div class="card-title" style="margin-bottom:.5rem;font-size:11px">계정 요약</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+            ${[['광고한도','ar-sum-limit','limit'],['일예산합','ar-sum-daily','dailyBudget'],['광고비용','ar-sum-cost','adCost'],
+               ['총지출₩','ar-sum-krw','totalKRW'],['총지출$','ar-sum-usd','totalUSD'],['잔여','ar-sum-rem','remaining']]
+              .map(([lbl,cls,fld])=>`<div><label class="field-label">${lbl}</label>
+                <input type="text" class="${cls}" placeholder="${lbl}" style="width:100%" value="${acc.summary?.[fld]||''}"></div>`).join('')}
+          </div>
+        </div>
+        <div class="card-title" style="margin-bottom:.5rem;font-size:11px">광고 목록</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;min-width:900px;font-size:12px">
+            <thead><tr style="background:var(--bg)">
+              ${['상태','작업명','시작일','종료일','도달','재생/노출','CPM','타겟','일예산','총지출₩','총지출$','링크',''].map(h=>`<th style="padding:5px 6px;border-bottom:1px solid var(--border);color:var(--text-3);font-weight:600;white-space:nowrap">${h}</th>`).join('')}
+            </tr></thead>
+            <tbody id="instaRows_${ai}">
+              ${(acc.ads&&acc.ads.length?acc.ads:[{}]).map((ad,ri)=>instaAdRow(ai,ri,ad)).join('')}
+            </tbody>
+          </table>
+        </div>
+        <button class="btn-add" style="margin-top:.5rem" onclick="instaAddAdRow(${ai})">+ 광고 추가</button>
+      </div>`).join('');
+  }
+
+  getEl().innerHTML = `
+    <div class="page-header" style="margin-bottom:1.5rem">
+      <button class="btn-secondary" style="margin-bottom:.75rem" onclick="window._ch_instaReports.${e?'goDetail':'goList'}()">← ${e?'상세':'목록'}</button>
+      <h2>${e?'인스타 수정':'인스타그램 광고 입력'}</h2>
+    </div>
+    <div class="card" style="margin-bottom:.75rem;padding:1rem">
+      <label class="field-label">광고 기간 (월)</label>
+      <input type="month" id="instaMonth" value="${preset}" style="font-size:13px;padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius)">
+    </div>
+    <div id="instaAccountsWrap">${buildAccountsHtml()}</div>
+    <button class="btn-secondary" style="width:100%;margin-bottom:1rem" onclick="instaAddAccount()">+ 계정 추가</button>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn-secondary" onclick="window._ch_instaReports.${e?'goDetail':'goList'}()">취소</button>
+      <button class="btn-primary" onclick="submitInsta(${e?e.id:'null'})">저장</button>
+    </div>`;
+}
+
+function instaAdRow(ai, ri, ad={}) {
+  const statuses = ['완료','진행중','대기'];
+  return `<tr class="ar-insta-row">
+    <td style="padding:3px 4px"><select style="font-size:11px;padding:3px 5px;border:1px solid var(--border-strong);border-radius:6px">
+      ${statuses.map(s=>`<option${ad.status===s?' selected':''}>${s}</option>`).join('')}</select></td>
+    ${['작업명','시작일','종료일','도달','재생/노출','CPM','타겟','일예산','총지출₩','총지출$','링크'].map((p,k)=>`
+      <td style="padding:3px 4px"><input type="${[1,2].includes(k)?'date':'text'}" placeholder="${p}" style="width:${[6,7,10].includes(k)?'90px':[3,4,5,8,9].includes(k)?'70px':k===10?'120px':'80px'};font-size:11px;padding:3px 6px;border:1px solid var(--border-strong);border-radius:6px" value="${ad[[null,'name','startDate','endDate','reach','playOrImp','cpm','target','dailyBudget','totalKRW','totalUSD','url'][k+1]]||''}"></td>`).join('')}
+    <td style="padding:3px 4px"><button class="btn-icon" style="font-size:13px;color:var(--text-3)" onclick="this.closest('tr').remove()">✕</button></td>
+  </tr>`;
+}
+
+function instaAddAdRow(ai) {
+  const tbody = document.getElementById('instaRows_'+ai);
+  if (tbody) tbody.insertAdjacentHTML('beforeend', instaAdRow(ai, tbody.children.length));
+}
+
+function instaAddAccount() {
+  const wrap = document.getElementById('instaAccountsWrap');
+  const ai = wrap.querySelectorAll('.ar-insta-account').length;
+  wrap.insertAdjacentHTML('beforeend', `
+    <div class="ar-insta-account card" style="margin-bottom:.75rem;padding:1rem" data-ai="${ai}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <input type="text" placeholder="계정명" class="ar-insta-acc-name" style="font-weight:600;font-size:13px;flex:1;margin-right:8px" value="">
+        <button class="btn-icon" style="color:var(--red-tx)" onclick="this.closest('.ar-insta-account').remove()">✕</button>
+      </div>
+      <div style="margin-bottom:.5rem">
+        <div class="card-title" style="margin-bottom:.5rem;font-size:11px">계정 요약</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+          ${[['광고한도','ar-sum-limit'],['일예산합','ar-sum-daily'],['광고비용','ar-sum-cost'],
+             ['총지출₩','ar-sum-krw'],['총지출$','ar-sum-usd'],['잔여','ar-sum-rem']]
+            .map(([lbl,cls])=>`<div><label class="field-label">${lbl}</label>
+              <input type="text" class="${cls}" placeholder="${lbl}" style="width:100%"></div>`).join('')}
+        </div>
+      </div>
+      <div class="card-title" style="margin-bottom:.5rem;font-size:11px">광고 목록</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:900px;font-size:12px">
+        <thead><tr style="background:var(--bg)">${['상태','작업명','시작일','종료일','도달','재생/노출','CPM','타겟','일예산','총지출₩','총지출$','링크',''].map(h=>`<th style="padding:5px 6px;border-bottom:1px solid var(--border);color:var(--text-3);font-weight:600;white-space:nowrap">${h}</th>`).join('')}</tr></thead>
+        <tbody id="instaRows_${ai}"><tr class="ar-insta-row"><td style="padding:3px 4px"><select style="font-size:11px;padding:3px 5px;border:1px solid var(--border-strong);border-radius:6px"><option>완료</option><option>진행중</option><option>대기</option></select></td>${Array(11).fill(0).map((_,k)=>`<td style="padding:3px 4px"><input type="${[1,2].includes(k)?'date':'text'}" style="width:70px;font-size:11px;padding:3px 6px;border:1px solid var(--border-strong);border-radius:6px"></td>`).join('')}<td><button class="btn-icon" style="font-size:13px;color:var(--text-3)" onclick="this.closest('tr').remove()">✕</button></td></tr></tbody>
+      </table></div>
+      <button class="btn-add" style="margin-top:.5rem" onclick="instaAddAdRow(${ai})">+ 광고 추가</button>
+    </div>`);
+}
+
+function instaRemoveAccount(ai) {
+  document.querySelector(`.ar-insta-account[data-ai="${ai}"]`)?.remove();
+}
+
+function submitInsta(editId) {
+  const month = document.getElementById('instaMonth').value;
+  if (!month) { toast('광고 기간(월)을 선택해주세요'); return; }
+  const accounts = [];
+  document.querySelectorAll('.ar-insta-account').forEach(accEl => {
+    const summary = {
+      limit: accEl.querySelector('.ar-sum-limit')?.value||'',
+      dailyBudget: accEl.querySelector('.ar-sum-daily')?.value||'',
+      adCost: accEl.querySelector('.ar-sum-cost')?.value||'',
+      totalKRW: accEl.querySelector('.ar-sum-krw')?.value||'',
+      totalUSD: accEl.querySelector('.ar-sum-usd')?.value||'',
+      remaining: accEl.querySelector('.ar-sum-rem')?.value||'',
+    };
+    const ads = [];
+    accEl.querySelectorAll('.ar-insta-row').forEach(row => {
+      const sel=row.querySelector('select'), ins=row.querySelectorAll('input');
+      if (ins[0]?.value) ads.push({status:sel?.value||'완료',name:ins[0]?.value||'',startDate:ins[1]?.value||'',endDate:ins[2]?.value||'',reach:ins[3]?.value||'',playOrImp:ins[4]?.value||'',cpm:ins[5]?.value||'',target:ins[6]?.value||'',dailyBudget:ins[7]?.value||'',totalKRW:ins[8]?.value||'',totalUSD:ins[9]?.value||'',url:ins[10]?.value||''});
+    });
+    accounts.push({ name:accEl.querySelector('.ar-insta-acc-name')?.value||'', summary, ads });
+  });
+  if (!DB.instaReports) DB.instaReports = [];
+  if (editId) {
+    const r = DB.instaReports.find(r=>r.id===editId);
+    if (r) { r.month=month; r.accounts=accounts; r.date=new Date().toLocaleDateString('ko-KR'); }
+    window._ch_instaReports.openDetail(editId);
+  } else {
+    const id = Date.now();
+    DB.instaReports.unshift({id, month, accounts, date:new Date().toLocaleDateString('ko-KR')});
+    window._ch_instaReports.openDetail(id);
+  }
+  save(); toast('저장됐습니다');
+}
+
+function renderInstaDetail(state, records, save2, renderView, getEl) {
+  const r = (records||[]).find(r=>r.id===state.detailId);
+  if (!r) { state.view='list'; renderView(); return; }
+  const total = (r.accounts||[]).reduce((s,acc)=>s+(parseInt((acc.summary?.totalKRW||'').replace(/[^0-9]/g,''))||0),0);
+  const thS='padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-3);font-weight:600;font-size:11px;white-space:nowrap;background:var(--bg)';
+  const tdS='padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px';
+  const instaHtml = (r.accounts||[]).map(acc=>{
+    const s=acc.summary||{};
+    return `<div style="margin-bottom:1.25rem">
+      <div style="font-size:13px;font-weight:700;padding:.6rem 1rem;background:var(--accent-light);border:1px solid var(--border);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0">${acc.name||'계정'}</div>
+      ${Object.values(s).some(v=>v)?`<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:.5rem 1rem;background:var(--bg);border:1px solid var(--border);border-bottom:none;font-size:12px">
+        ${s.limit?`<span>광고한도: <strong>${s.limit}</strong></span>`:''}${s.dailyBudget?`<span>일예산합: <strong>${s.dailyBudget}</strong></span>`:''}
+        ${s.adCost?`<span>광고비용: <strong>${s.adCost}</strong></span>`:''}${s.totalKRW?`<span>총지출₩: <strong>${s.totalKRW}</strong></span>`:''}
+        ${s.totalUSD?`<span>총지출$: <strong>${s.totalUSD}</strong></span>`:''}${s.remaining?`<span style="color:var(--teal-tx)">잔여: <strong>${s.remaining}</strong></span>`:''}
+      </div>`:''}
+      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius)">
+        <table style="width:100%;border-collapse:collapse;min-width:900px">
+          <thead><tr>${['상태','작업이름','기간','도달','재생/노출','CPM','타겟','일예산','총지출₩','총지출$'].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+          <tbody>${acc.ads?.length?acc.ads.map(ad=>{const sc=ad.status==='완료'?'teal':ad.status==='진행중'?'blue':'amber';return`<tr><td style="${tdS}"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${ad.status||'완료'}</span></td><td style="${tdS}">${ad.url?`<a href="${ad.url}" target="_blank" style="color:var(--blue-tx);text-decoration:none">${ad.name||''}</a>`:(ad.name||'—')}</td><td style="${tdS};color:var(--text-2)">${ad.startDate||''}${ad.endDate?` ~ ${ad.endDate}`:''}</td><td style="${tdS};text-align:right">${ad.reach||'—'}</td><td style="${tdS};text-align:right">${ad.playOrImp||'—'}</td><td style="${tdS};text-align:right">${ad.cpm||'—'}</td><td style="${tdS};font-size:11px">${ad.target||'—'}</td><td style="${tdS};text-align:right">${ad.dailyBudget||'—'}</td><td style="${tdS};text-align:right;font-weight:500">${ad.totalKRW||'—'}</td><td style="${tdS};text-align:right">${ad.totalUSD||'—'}</td></tr>`;}).join(''):`<tr><td colspan="10" style="padding:1.5rem;text-align:center;color:var(--text-3)">광고 없음</td></tr>`}</tbody>
+        </table>
+      </div></div>`;
+  }).join('');
+  getEl().innerHTML = `
+    <div style="margin-bottom:1.5rem"><button class="btn-secondary" onclick="window._ch_instaReports.goList()">← 목록</button></div>
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+        <div><h2 style="font-size:20px;margin-bottom:.25rem">📸 ${formatAdMonth(r.month)} 인스타그램</h2><div style="font-size:12px;color:var(--text-3)">${r.date||''} 저장</div></div>
+        <div style="text-align:right"><div style="font-size:22px;font-weight:700">${total>0?total.toLocaleString()+'원':'—'}</div><div style="font-size:11px;color:var(--text-3)">총 집행금액</div></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:1.5rem">
+        <button class="btn-secondary" onclick="window._ch_instaReports.openEdit(${r.id})">수정</button>
+        <button class="btn-secondary" style="color:var(--red-tx);border-color:var(--red-tx)" onclick="window._ch_instaReports.deleteEntry(${r.id})">삭제</button>
+      </div>
+      ${instaHtml}
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:.25rem">
+        <div style="font-size:12px;color:var(--text-3)">AI 분석이 필요하다면 데이터를 복사해 ChatGPT, Claude 등에 붙여넣으세요</div>
+        <button class="btn-secondary" style="font-size:12px;white-space:nowrap" onclick="copyInstaData(${r.id})">📋 AI 분석용 데이터 복사</button>
+      </div>
+    </div>`;
+}
+
+function copyInstaData(id) {
+  const r = (DB.instaReports||[]).find(r=>r.id===id);
+  if (!r) return;
+  let txt = `${formatAdMonth(r.month)} 인스타그램 광고 데이터\n${'='.repeat(40)}\n\n`;
+  (r.accounts||[]).forEach(acc=>{
+    txt+=`▶ 계정: ${acc.name}\n`;
+    const s=acc.summary||{};
+    if(s.limit)txt+=`  광고한도: ${s.limit}\n`;if(s.totalKRW)txt+=`  총지출(₩): ${s.totalKRW}\n`;if(s.totalUSD)txt+=`  총지출($): ${s.totalUSD}\n`;if(s.remaining)txt+=`  잔여: ${s.remaining}\n`;
+    (acc.ads||[]).forEach(ad=>{txt+=`  - ${ad.name||''} (${ad.status||''}) 도달:${ad.reach||'-'} CPM:${ad.cpm||'-'} 총지출:${ad.totalKRW||'-'}₩\n`;});
+    txt+='\n';
+  });
+  txt+=`${'='.repeat(40)}\n위 인스타그램 광고 데이터를 분석해주세요. 계정별/광고별 효율 비교, 성과 상위 광고와 개선이 필요한 광고, 다음 달 운영 제안을 포함해주세요.`;
+  navigator.clipboard.writeText(txt).then(()=>toast('복사됐습니다. AI 툴에 붙여넣으세요!'));
+}
+
+// ═══ NAVER ═══
+function initNaver() {
+  if (!window._ch_naverReports) window._ch_naverReports = makeChannelModule({
+    key: 'naverReports', label: '네이버 검색광고', color: '#1a56a0',
+    containerId: 'naverContainer',
+    calcTotal: r => parseInt((r.summary?.totalCost||'').replace(/[^0-9]/g,''))||0,
+    renderWrite: renderNaverWrite,
+    renderDetail: renderNaverDetail
+  });
+  window._ch_naverReports.init();
+}
+
+function renderNaverWrite(state, save2, renderView, getEl) {
+  const e = state.editId ? (DB.naverReports||[]).find(r=>r.id===state.editId) : null;
+  const preset = e ? e.month : (state._preset||'');
+  const s = e?.summary||{};
+  const camps = e?.campaigns||[{}];
+  getEl().innerHTML = `
+    <div class="page-header" style="margin-bottom:1.5rem">
+      <button class="btn-secondary" style="margin-bottom:.75rem" onclick="window._ch_naverReports.${e?'goDetail':'goList'}()">← ${e?'상세':'목록'}</button>
+      <h2>${e?'네이버 수정':'네이버 광고 입력'}</h2>
+    </div>
+    <div class="card" style="margin-bottom:.75rem;padding:1rem">
+      <label class="field-label">광고 기간 (월)</label>
+      <input type="month" id="naverMonth" value="${preset}" style="font-size:13px;padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius)">
+    </div>
+    <div class="card" style="margin-bottom:.75rem">
+      <div class="card-title">계정 요약</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem">
+        ${[['광고한도(원)','nav_limit','limit'],['총노출','nav_imp','totalImp'],['총클릭','nav_clicks','totalClicks'],
+           ['총지출(원)','nav_cost','totalCost'],['잔여(원)','nav_rem','remaining']]
+          .map(([lbl,id,fld])=>`<div><label class="field-label">${lbl}</label><input type="text" id="${id}" placeholder="${lbl}" style="width:100%" value="${s[fld]||''}"></div>`).join('')}
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:.75rem">
+      <div class="card-title">캠페인 목록</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:800px;font-size:12px">
+          <thead><tr style="background:var(--bg)">${['상태','캠페인명','시작일','종료일','노출수','클릭수','CTR%','CPC(원)','캠페인유형','총비용','잔여',''].map(h=>`<th style="padding:5px 6px;border-bottom:1px solid var(--border);color:var(--text-3);font-weight:600;white-space:nowrap">${h}</th>`).join('')}</tr></thead>
+          <tbody id="naverRows">
+            ${camps.map(c=>naverCampRow(c)).join('')}
+          </tbody>
+        </table>
+      </div>
+      <button class="btn-add" style="margin-top:.5rem" onclick="naverAddRow()">+ 캠페인 추가</button>
+    </div>
+    <div class="card" style="margin-bottom:.75rem">
+      <label class="field-label">메모</label>
+      <textarea id="naverMemo" placeholder="특이사항, 메모..." style="min-height:60px">${e?.memo||''}</textarea>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn-secondary" onclick="window._ch_naverReports.${e?'goDetail':'goList'}()">취소</button>
+      <button class="btn-primary" onclick="submitNaver(${e?e.id:'null'})">저장</button>
+    </div>`;
+}
+
+function naverCampRow(c={}) {
+  const statuses=['완료','진행중','대기'];
+  return `<tr class="naver-row">
+    <td style="padding:3px 4px"><select style="font-size:11px;padding:3px 5px;border:1px solid var(--border-strong);border-radius:6px">${statuses.map(s=>`<option${c.status===s?' selected':''}>${s}</option>`).join('')}</select></td>
+    ${['캠페인명','시작일','종료일','노출수','클릭수','CTR%','CPC(원)','캠페인유형','총비용','잔여'].map((p,k)=>`
+      <td style="padding:3px 4px"><input type="${[1,2].includes(k)?'date':'text'}" placeholder="${p}" style="width:${[7].includes(k)?'90px':[3,4,5,6,8,9].includes(k)?'70px':'80px'};font-size:11px;padding:3px 6px;border:1px solid var(--border-strong);border-radius:6px" value="${c[[null,'name','startDate','endDate','impressions','clicks','ctr','cpc','campaignType','totalCost','remaining'][k+1]]||''}"></td>`).join('')}
+    <td><button class="btn-icon" style="font-size:13px;color:var(--text-3)" onclick="this.closest('tr').remove()">✕</button></td>
+  </tr>`;
+}
+function naverAddRow() { document.getElementById('naverRows').insertAdjacentHTML('beforeend', naverCampRow()); }
+
+function submitNaver(editId) {
+  const month = document.getElementById('naverMonth').value;
+  if (!month) { toast('광고 기간(월)을 선택해주세요'); return; }
+  const g = id => document.getElementById(id)?.value||'';
+  const summary = {limit:g('nav_limit'),totalImp:g('nav_imp'),totalClicks:g('nav_clicks'),totalCost:g('nav_cost'),remaining:g('nav_rem')};
+  const campaigns=[];
+  document.querySelectorAll('#naverRows tr').forEach(row=>{
+    const sel=row.querySelector('select'),ins=row.querySelectorAll('input');
+    if(ins[0]?.value) campaigns.push({status:sel?.value||'완료',name:ins[0]?.value||'',startDate:ins[1]?.value||'',endDate:ins[2]?.value||'',impressions:ins[3]?.value||'',clicks:ins[4]?.value||'',ctr:ins[5]?.value||'',cpc:ins[6]?.value||'',campaignType:ins[7]?.value||'',totalCost:ins[8]?.value||'',remaining:ins[9]?.value||''});
+  });
+  const memo=g('naverMemo');
+  if (!DB.naverReports) DB.naverReports=[];
+  if (editId) {
+    const r=DB.naverReports.find(r=>r.id===editId);
+    if(r){r.month=month;r.summary=summary;r.campaigns=campaigns;r.memo=memo;r.date=new Date().toLocaleDateString('ko-KR');}
+    window._ch_naverReports.openDetail(editId);
+  } else {
+    const id=Date.now();
+    DB.naverReports.unshift({id,month,summary,campaigns,memo,date:new Date().toLocaleDateString('ko-KR')});
+    window._ch_naverReports.openDetail(id);
+  }
+  save(); toast('저장됐습니다');
+}
+
+function renderNaverDetail(state, records, save2, renderView, getEl) {
+  const r=(records||[]).find(r=>r.id===state.detailId);
+  if(!r){state.view='list';renderView();return;}
+  const s=r.summary||{};
+  const thS='padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-3);font-weight:600;font-size:11px;white-space:nowrap;background:var(--bg)';
+  const tdS='padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px';
+  getEl().innerHTML=`
+    <div style="margin-bottom:1.5rem"><button class="btn-secondary" onclick="window._ch_naverReports.goList()">← 목록</button></div>
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+        <div><h2 style="font-size:20px;margin-bottom:.25rem">🔵 ${formatAdMonth(r.month)} 네이버</h2><div style="font-size:12px;color:var(--text-3)">${r.date||''} 저장</div></div>
+        <div style="text-align:right"><div style="font-size:22px;font-weight:700">${s.totalCost?parseInt(s.totalCost.replace(/[^0-9]/g,'')).toLocaleString()+'원':'—'}</div><div style="font-size:11px;color:var(--text-3)">총 집행금액</div></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:1.5rem">
+        <button class="btn-secondary" onclick="window._ch_naverReports.openEdit(${r.id})">수정</button>
+        <button class="btn-secondary" style="color:var(--red-tx);border-color:var(--red-tx)" onclick="window._ch_naverReports.deleteEntry(${r.id})">삭제</button>
+      </div>
+      ${Object.values(s).some(v=>v)?`<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:.5rem .875rem;background:var(--blue-bg);border-radius:var(--radius);margin-bottom:1rem;font-size:12px">
+        ${s.limit?`<span>광고한도: <strong>${s.limit}원</strong></span>`:''}${s.totalImp?`<span>총노출: <strong>${s.totalImp}</strong></span>`:''}
+        ${s.totalClicks?`<span>총클릭: <strong>${s.totalClicks}</strong></span>`:''}${s.totalCost?`<span style="color:var(--blue-tx)">총지출: <strong>${s.totalCost}원</strong></span>`:''}
+        ${s.remaining?`<span style="color:var(--teal-tx)">잔여: <strong>${s.remaining}원</strong></span>`:''}
+      </div>`:''}
+      ${r.campaigns?.length?`<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:1rem">
+        <table style="width:100%;border-collapse:collapse;min-width:800px">
+          <thead><tr>${['상태','캠페인명','기간','노출수','클릭수','CTR%','CPC(원)','캠페인유형','총비용','잔여'].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+          <tbody>${r.campaigns.map(c=>{const sc=c.status==='완료'?'teal':c.status==='진행중'?'blue':'amber';return`<tr><td style="${tdS}"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${c.status||'완료'}</span></td><td style="${tdS}">${c.name||'—'}</td><td style="${tdS};color:var(--text-2)">${c.startDate||''}${c.endDate?` ~ ${c.endDate}`:''}</td><td style="${tdS};text-align:right">${c.impressions||'—'}</td><td style="${tdS};text-align:right">${c.clicks||'—'}</td><td style="${tdS};text-align:right">${c.ctr||'—'}</td><td style="${tdS};text-align:right">${c.cpc||'—'}</td><td style="${tdS}">${c.campaignType||'—'}</td><td style="${tdS};text-align:right;font-weight:500">${c.totalCost||'—'}</td><td style="${tdS};text-align:right">${c.remaining||'—'}</td></tr>`;}).join('')}</tbody>
+        </table></div>`:''}
+      ${r.memo?`<div style="font-size:12px;color:var(--text-2);padding:.625rem .875rem;background:var(--bg);border-radius:var(--radius);white-space:pre-wrap;margin-bottom:1rem">${r.memo}</div>`:''}
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:.25rem">
+        <div style="font-size:12px;color:var(--text-3)">AI 분석이 필요하다면 데이터를 복사해 ChatGPT, Claude 등에 붙여넣으세요</div>
+        <button class="btn-secondary" style="font-size:12px;white-space:nowrap" onclick="copyNaverData(${r.id})">📋 AI 분석용 데이터 복사</button>
+      </div>
+    </div>`;
+}
+
+function copyNaverData(id) {
+  const r=(DB.naverReports||[]).find(r=>r.id===id);
+  if(!r)return;
+  let txt=`${formatAdMonth(r.month)} 네이버 검색광고 데이터\n${'='.repeat(40)}\n\n`;
+  const s=r.summary||{};
+  if(s.limit)txt+=`광고한도: ${s.limit}원\n`;if(s.totalImp)txt+=`총노출: ${s.totalImp}\n`;if(s.totalClicks)txt+=`총클릭: ${s.totalClicks}\n`;if(s.totalCost)txt+=`총지출: ${s.totalCost}원\n`;if(s.remaining)txt+=`잔여: ${s.remaining}원\n`;
+  (r.campaigns||[]).forEach(c=>{txt+=`- ${c.name||''} (${c.status||''}) 노출:${c.impressions||'-'} 클릭:${c.clicks||'-'} CTR:${c.ctr||'-'}% CPC:${c.cpc||'-'}원\n`;});
+  if(r.memo)txt+=`\n메모: ${r.memo}\n`;
+  txt+=`\n${'='.repeat(40)}\n위 네이버 검색광고 데이터를 분석해주세요. 키워드별 효율 비교, 성과 좋은 캠페인과 개선이 필요한 캠페인, 다음 달 운영 제안을 포함해주세요.`;
+  navigator.clipboard.writeText(txt).then(()=>toast('복사됐습니다. AI 툴에 붙여넣으세요!'));
+}
+
+// ═══ KAKAO ═══
+function initKakao() {
+  if (!window._ch_kakaoReports) window._ch_kakaoReports = makeChannelModule({
+    key: 'kakaoReports', label: '카카오 배너광고', color: '#ba7517',
+    containerId: 'kakaoContainer',
+    calcTotal: r => parseInt((r.summary?.totalCost||'').replace(/[^0-9]/g,''))||0,
+    renderWrite: renderKakaoWrite,
+    renderDetail: renderKakaoDetail
+  });
+  window._ch_kakaoReports.init();
+}
+
+function renderKakaoWrite(state, save2, renderView, getEl) {
+  const e = state.editId ? (DB.kakaoReports||[]).find(r=>r.id===state.editId) : null;
+  const preset = e ? e.month : (state._preset||'');
+  const s = e?.summary||{};
+  const ads = e?.ads||[{}];
+  getEl().innerHTML = `
+    <div class="page-header" style="margin-bottom:1.5rem">
+      <button class="btn-secondary" style="margin-bottom:.75rem" onclick="window._ch_kakaoReports.${e?'goDetail':'goList'}()">← ${e?'상세':'목록'}</button>
+      <h2>${e?'카카오 수정':'카카오 광고 입력'}</h2>
+    </div>
+    <div class="card" style="margin-bottom:.75rem;padding:1rem">
+      <label class="field-label">광고 기간 (월)</label>
+      <input type="month" id="kakaoMonth" value="${preset}" style="font-size:13px;padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius)">
+    </div>
+    <div class="card" style="margin-bottom:.75rem">
+      <div class="card-title">계정 요약</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem">
+        ${[['광고한도(원)','kak_limit','limit'],['총노출','kak_imp','totalImp'],['총클릭','kak_clicks','totalClicks'],
+           ['총지출(원)','kak_cost','totalCost'],['보상환급(원)','kak_reward','reward'],['잔여(원)','kak_rem','remaining']]
+          .map(([lbl,id,fld])=>`<div><label class="field-label">${lbl}</label><input type="text" id="${id}" placeholder="${lbl}" style="width:100%" value="${s[fld]||''}"></div>`).join('')}
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:.75rem">
+      <div class="card-title">광고 목록</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:900px;font-size:12px">
+          <thead><tr style="background:var(--bg)">${['상태','광고명','시작일','종료일','노출수','클릭수','CTR%','도달','CPC','CPR','총비용','보상',''].map(h=>`<th style="padding:5px 6px;border-bottom:1px solid var(--border);color:var(--text-3);font-weight:600;white-space:nowrap">${h}</th>`).join('')}</tr></thead>
+          <tbody id="kakaoRows">${ads.map(a=>kakaoAdRow(a)).join('')}</tbody>
+        </table>
+      </div>
+      <button class="btn-add" style="margin-top:.5rem" onclick="kakaoAddRow()">+ 광고 추가</button>
+    </div>
+    <div class="card" style="margin-bottom:.75rem">
+      <label class="field-label">메모</label>
+      <textarea id="kakaoMemo" placeholder="특이사항, 메모..." style="min-height:60px">${e?.memo||''}</textarea>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn-secondary" onclick="window._ch_kakaoReports.${e?'goDetail':'goList'}()">취소</button>
+      <button class="btn-primary" onclick="submitKakao(${e?e.id:'null'})">저장</button>
+    </div>`;
+}
+
+function kakaoAdRow(a={}) {
+  const statuses=['완료','진행중','대기'];
+  return `<tr class="kakao-row">
+    <td style="padding:3px 4px"><select style="font-size:11px;padding:3px 5px;border:1px solid var(--border-strong);border-radius:6px">${statuses.map(s=>`<option${a.status===s?' selected':''}>${s}</option>`).join('')}</select></td>
+    ${['광고명','시작일','종료일','노출수','클릭수','CTR%','도달','CPC','CPR','총비용','보상'].map((p,k)=>`
+      <td style="padding:3px 4px"><input type="${[1,2].includes(k)?'date':'text'}" placeholder="${p}" style="width:70px;font-size:11px;padding:3px 6px;border:1px solid var(--border-strong);border-radius:6px" value="${a[[null,'name','startDate','endDate','impressions','clicks','ctr','reach','cpc','cpr','totalCost','reward'][k+1]]||''}"></td>`).join('')}
+    <td><button class="btn-icon" style="font-size:13px;color:var(--text-3)" onclick="this.closest('tr').remove()">✕</button></td>
+  </tr>`;
+}
+function kakaoAddRow() { document.getElementById('kakaoRows').insertAdjacentHTML('beforeend', kakaoAdRow()); }
+
+function submitKakao(editId) {
+  const month=document.getElementById('kakaoMonth').value;
+  if(!month){toast('광고 기간(월)을 선택해주세요');return;}
+  const g=id=>document.getElementById(id)?.value||'';
+  const summary={limit:g('kak_limit'),totalImp:g('kak_imp'),totalClicks:g('kak_clicks'),totalCost:g('kak_cost'),reward:g('kak_reward'),remaining:g('kak_rem')};
+  const ads=[];
+  document.querySelectorAll('#kakaoRows tr').forEach(row=>{
+    const sel=row.querySelector('select'),ins=row.querySelectorAll('input');
+    if(ins[0]?.value)ads.push({status:sel?.value||'완료',name:ins[0]?.value||'',startDate:ins[1]?.value||'',endDate:ins[2]?.value||'',impressions:ins[3]?.value||'',clicks:ins[4]?.value||'',ctr:ins[5]?.value||'',reach:ins[6]?.value||'',cpc:ins[7]?.value||'',cpr:ins[8]?.value||'',totalCost:ins[9]?.value||'',reward:ins[10]?.value||''});
+  });
+  const memo=g('kakaoMemo');
+  if(!DB.kakaoReports)DB.kakaoReports=[];
+  if(editId){
+    const r=DB.kakaoReports.find(r=>r.id===editId);
+    if(r){r.month=month;r.summary=summary;r.ads=ads;r.memo=memo;r.date=new Date().toLocaleDateString('ko-KR');}
+    window._ch_kakaoReports.openDetail(editId);
+  } else {
+    const id=Date.now();
+    DB.kakaoReports.unshift({id,month,summary,ads,memo,date:new Date().toLocaleDateString('ko-KR')});
+    window._ch_kakaoReports.openDetail(id);
+  }
+  save();toast('저장됐습니다');
+}
+
+function renderKakaoDetail(state, records, save2, renderView, getEl) {
+  const r=(records||[]).find(r=>r.id===state.detailId);
+  if(!r){state.view='list';renderView();return;}
+  const s=r.summary||{};
+  const thS='padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-3);font-weight:600;font-size:11px;white-space:nowrap;background:var(--bg)';
+  const tdS='padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px';
+  getEl().innerHTML=`
+    <div style="margin-bottom:1.5rem"><button class="btn-secondary" onclick="window._ch_kakaoReports.goList()">← 목록</button></div>
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+        <div><h2 style="font-size:20px;margin-bottom:.25rem">💛 ${formatAdMonth(r.month)} 카카오</h2><div style="font-size:12px;color:var(--text-3)">${r.date||''} 저장</div></div>
+        <div style="text-align:right"><div style="font-size:22px;font-weight:700">${s.totalCost?parseInt(s.totalCost.replace(/[^0-9]/g,'')).toLocaleString()+'원':'—'}</div><div style="font-size:11px;color:var(--text-3)">총 집행금액</div></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:1.5rem">
+        <button class="btn-secondary" onclick="window._ch_kakaoReports.openEdit(${r.id})">수정</button>
+        <button class="btn-secondary" style="color:var(--red-tx);border-color:var(--red-tx)" onclick="window._ch_kakaoReports.deleteEntry(${r.id})">삭제</button>
+      </div>
+      ${Object.values(s).some(v=>v)?`<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:.5rem .875rem;background:var(--amber-bg);border-radius:var(--radius);margin-bottom:1rem;font-size:12px">
+        ${s.limit?`<span>광고한도: <strong>${s.limit}원</strong></span>`:''}${s.totalImp?`<span>총노출: <strong>${s.totalImp}</strong></span>`:''}
+        ${s.totalClicks?`<span>총클릭: <strong>${s.totalClicks}</strong></span>`:''}${s.totalCost?`<span style="color:var(--amber-tx)">총지출: <strong>${s.totalCost}원</strong></span>`:''}
+        ${s.reward?`<span>보상환급: <strong>${s.reward}원</strong></span>`:''}${s.remaining?`<span style="color:var(--teal-tx)">잔여: <strong>${s.remaining}원</strong></span>`:''}
+      </div>`:''}
+      ${r.ads?.length?`<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:1rem">
+        <table style="width:100%;border-collapse:collapse;min-width:900px">
+          <thead><tr>${['상태','광고명','기간','노출수','클릭수','CTR%','도달','CPC','CPR','총비용','보상'].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+          <tbody>${r.ads.map(a=>{const sc=a.status==='완료'?'teal':a.status==='진행중'?'blue':'amber';return`<tr><td style="${tdS}"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${a.status||'완료'}</span></td><td style="${tdS}">${a.name||'—'}</td><td style="${tdS};color:var(--text-2)">${a.startDate||''}${a.endDate?` ~ ${a.endDate}`:''}</td><td style="${tdS};text-align:right">${a.impressions||'—'}</td><td style="${tdS};text-align:right">${a.clicks||'—'}</td><td style="${tdS};text-align:right">${a.ctr||'—'}</td><td style="${tdS};text-align:right">${a.reach||'—'}</td><td style="${tdS};text-align:right">${a.cpc||'—'}</td><td style="${tdS};text-align:right">${a.cpr||'—'}</td><td style="${tdS};text-align:right;font-weight:500">${a.totalCost||'—'}</td><td style="${tdS};text-align:right">${a.reward||'—'}</td></tr>`;}).join('')}</tbody>
+        </table></div>`:''}
+      ${r.memo?`<div style="font-size:12px;color:var(--text-2);padding:.625rem .875rem;background:var(--bg);border-radius:var(--radius);white-space:pre-wrap;margin-bottom:1rem">${r.memo}</div>`:''}
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:.25rem">
+        <div style="font-size:12px;color:var(--text-3)">AI 분석이 필요하다면 데이터를 복사해 ChatGPT, Claude 등에 붙여넣으세요</div>
+        <button class="btn-secondary" style="font-size:12px;white-space:nowrap" onclick="copyKakaoData(${r.id})">📋 AI 분석용 데이터 복사</button>
+      </div>
+    </div>`;
+}
+
+function copyKakaoData(id) {
+  const r=(DB.kakaoReports||[]).find(r=>r.id===id);
+  if(!r)return;
+  let txt=`${formatAdMonth(r.month)} 카카오 배너광고 데이터\n${'='.repeat(40)}\n\n`;
+  const s=r.summary||{};
+  if(s.limit)txt+=`광고한도: ${s.limit}원\n`;if(s.totalImp)txt+=`총노출: ${s.totalImp}\n`;if(s.totalClicks)txt+=`총클릭: ${s.totalClicks}\n`;if(s.totalCost)txt+=`총지출: ${s.totalCost}원\n`;if(s.reward)txt+=`보상환급: ${s.reward}원\n`;if(s.remaining)txt+=`잔여: ${s.remaining}원\n`;
+  (r.ads||[]).forEach(a=>{txt+=`- ${a.name||''} (${a.status||''}) 노출:${a.impressions||'-'} 클릭:${a.clicks||'-'} CTR:${a.ctr||'-'}% 총비용:${a.totalCost||'-'}원\n`;});
+  if(r.memo)txt+=`\n메모: ${r.memo}\n`;
+  txt+=`\n${'='.repeat(40)}\n위 카카오 배너광고 데이터를 분석해주세요. 광고별 효율 비교, 성과 좋은 광고와 개선이 필요한 광고, 다음 달 운영 제안을 포함해주세요.`;
+  navigator.clipboard.writeText(txt).then(()=>toast('복사됐습니다. AI 툴에 붙여넣으세요!'));
+}
+
+// ═══ AD REPORT (통합보고서) ═══
 let adReportView = 'list';
 let adReportDetailId = null;
 let adReportEditId = null;
 let adReportSelectedYear = new Date().getFullYear();
+let adReportSelectedMonth = null;
 
 function initAdReport() {
   if (!DB.adReports) DB.adReports = [];
@@ -1186,66 +1787,53 @@ function initAdReport() {
 
 function renderAdReportView() {
   if (adReportView === 'list') renderAdReportList();
-  else if (adReportView === 'write') renderAdReportWrite();
   else if (adReportView === 'detail') renderAdReportDetail();
 }
 
 function renderAdReportList() {
   const el = document.getElementById('adReportContainer');
-  const reports = DB.adReports || [];
+  const parseKRW = v => parseInt((v||'').toString().replace(/[^0-9]/g,''))||0;
 
-  // 보고서가 있는 연도 + 올해 포함
-  const years = [...new Set([
-    new Date().getFullYear(),
-    ...reports.map(r => parseInt(r.month.split('-')[0]))
-  ])].sort((a,b) => b - a);
-
+  // 세 채널에서 존재하는 모든 연도 수집
+  const allMonths = [
+    ...(DB.instaReports||[]).map(r=>r.month),
+    ...(DB.naverReports||[]).map(r=>r.month),
+    ...(DB.kakaoReports||[]).map(r=>r.month),
+  ];
+  const years = [...new Set([new Date().getFullYear(), ...allMonths.map(m=>parseInt(m))])].sort((a,b)=>b-a);
   if (!years.includes(adReportSelectedYear)) adReportSelectedYear = years[0];
-
-  // 선택 연도의 월별 보고서 맵
-  const yearMap = {};
-  reports.filter(r => r.month.startsWith(adReportSelectedYear + '-')).forEach(r => {
-    yearMap[parseInt(r.month.split('-')[1])] = r;
-  });
+  const y = adReportSelectedYear;
 
   el.innerHTML = `
     <div class="page-header" style="margin-bottom:1.5rem">
-      <h2>광고보고서</h2>
-      <div class="subtitle">월별 광고 집행 현황 기록</div>
+      <h2>통합보고서</h2>
+      <div class="subtitle">인스타그램 · 네이버 · 카카오 월별 합산</div>
     </div>
-
     <div style="display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap">
-      ${years.map(y => `
-        <button class="${y === adReportSelectedYear ? 'btn-primary' : 'btn-secondary'}"
-          style="font-size:13px;padding:6px 20px"
-          onclick="adReportSelectedYear=${y};renderAdReportList()">
-          ${y}년
-        </button>`).join('')}
+      ${years.map(yr=>`<button class="${yr===y?'btn-primary':'btn-secondary'}" style="font-size:13px;padding:6px 20px" onclick="adReportSelectedYear=${yr};renderAdReportList()">${yr}년</button>`).join('')}
     </div>
-
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem">
       ${Array.from({length:12},(_,i)=>i+1).map(m => {
-        const r = yearMap[m];
-        const preset = `${adReportSelectedYear}-${String(m).padStart(2,'0')}`;
-        if (r) {
-          const total = calcAdTotal(r);
-          const platforms = [
-            (r.instaAccounts?.some(a=>a.summary?.totalKRW||a.ads?.length)||r.insta?.spend) && '인스타',
-            (r.naverSummary?.totalCost||r.naver?.spend) && '네이버',
-            (r.kakaoSummary?.totalCost||r.kakao?.spend) && '카카오',
-          ].filter(Boolean);
-          return `<div class="card month-card" onclick="adReportDetailId=${r.id};adReportView='detail';renderAdReportView()">
-            <div style="font-size:12px;font-weight:700;color:var(--text-3);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em">${m}월</div>
-            <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:.35rem">${total > 0 ? total.toLocaleString()+'원' : '—'}</div>
-            <div style="font-size:11px;color:var(--text-3)">${platforms.join(' · ') || '—'}</div>
-          </div>`;
-        } else {
-          return `<div class="card month-card empty" onclick="openAdReportWrite('${preset}')">
-            <div style="font-size:12px;font-weight:700;color:var(--text-3);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em">${m}월</div>
-            <div style="font-size:22px;color:var(--border-strong);text-align:center;padding:.4rem 0;line-height:1">+</div>
-            <div style="font-size:11px;color:var(--text-3);text-align:center">보고서 없음</div>
-          </div>`;
-        }
+        const preset = `${y}-${String(m).padStart(2,'0')}`;
+        const insta = (DB.instaReports||[]).find(r=>r.month===preset);
+        const naver = (DB.naverReports||[]).find(r=>r.month===preset);
+        const kakao = (DB.kakaoReports||[]).find(r=>r.month===preset);
+        const hasAny = insta||naver||kakao;
+        let total = 0;
+        if(insta)(insta.accounts||[]).forEach(acc=>total+=parseKRW(acc.summary?.totalKRW));
+        if(naver)total+=parseKRW(naver.summary?.totalCost);
+        if(kakao)total+=parseKRW(kakao.summary?.totalCost);
+        const tags=[insta&&'📸',naver&&'🔵',kakao&&'💛'].filter(Boolean);
+        return hasAny
+          ? `<div class="card month-card" onclick="adReportSelectedMonth='${preset}';adReportView='detail';renderAdReportView()">
+              <div style="font-size:12px;font-weight:700;color:var(--text-3);margin-bottom:.5rem">${m}월</div>
+              <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:.35rem">${total>0?total.toLocaleString()+'원':'입력됨'}</div>
+              <div style="font-size:13px">${tags.join(' ')}</div>
+             </div>`
+          : `<div class="card month-card empty" style="opacity:.4">
+              <div style="font-size:12px;font-weight:700;color:var(--text-3);margin-bottom:.5rem">${m}월</div>
+              <div style="font-size:13px;color:var(--text-3);text-align:center;padding:.4rem 0">미입력</div>
+             </div>`;
       }).join('')}
     </div>`;
 }
@@ -1493,159 +2081,144 @@ function kakaoRowHtml(a) {
 
 function renderAdReportDetail() {
   const el = document.getElementById('adReportContainer');
-  const r = (DB.adReports||[]).find(r => r.id === adReportDetailId);
-  if (!r) { adReportView = 'list'; renderAdReportView(); return; }
-  const total = calcAdTotal(r);
+  const month = adReportSelectedMonth;
+  if (!month) { adReportView = 'list'; renderAdReportView(); return; }
+  const insta = (DB.instaReports||[]).find(r=>r.month===month);
+  const naver = (DB.naverReports||[]).find(r=>r.month===month);
+  const kakao = (DB.kakaoReports||[]).find(r=>r.month===month);
+  if (!insta && !naver && !kakao) { adReportView = 'list'; renderAdReportView(); return; }
+  const parseKRW = v => parseInt((v||'').toString().replace(/[^0-9]/g,''))||0;
+  let total = 0;
+  if(insta)(insta.accounts||[]).forEach(acc=>total+=parseKRW(acc.summary?.totalKRW));
+  if(naver)total+=parseKRW(naver.summary?.totalCost);
+  if(kakao)total+=parseKRW(kakao.summary?.totalCost);
 
-  const thStyle = 'padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-3);font-weight:600;font-size:11px;white-space:nowrap;background:var(--bg)';
-  const tdStyle = 'padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px';
+  const thS='padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-3);font-weight:600;font-size:11px;white-space:nowrap;background:var(--bg)';
+  const tdS='padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px';
 
-  // 인스타 섹션
-  const instaHtml = (r.instaAccounts||[]).map(acc => {
-    const s = acc.summary||{};
-    const hasAds = acc.ads?.length > 0;
-    return `<div style="margin-bottom:1.25rem">
-      <div style="font-size:13px;font-weight:700;padding:.6rem 1rem;background:var(--accent-light);border:1px solid var(--border);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0">${acc.name}</div>
-      ${Object.values(s).some(v=>v) ? `<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:.5rem 1rem;background:var(--bg);border:1px solid var(--border);border-bottom:none;font-size:12px">
-        ${s.limit?`<span>광고한도: <strong>${s.limit}</strong></span>`:''}
-        ${s.dailyBudget?`<span>일예산합: <strong>${s.dailyBudget}</strong></span>`:''}
-        ${s.adCost?`<span>광고비용: <strong>${s.adCost}</strong></span>`:''}
-        ${s.totalKRW?`<span style="color:var(--text)">총지출₩: <strong>${s.totalKRW}</strong></span>`:''}
-        ${s.totalUSD?`<span>총지출$: <strong>${s.totalUSD}</strong></span>`:''}
-        ${s.remaining?`<span style="color:var(--teal-tx)">잔여: <strong>${s.remaining}</strong></span>`:''}
-      </div>` : ''}
-      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:${Object.values(s).some(v=>v)?'0':'var(--radius)'} ${Object.values(s).some(v=>v)?'0':'var(--radius)'} var(--radius) var(--radius)">
-        <table style="width:100%;border-collapse:collapse;min-width:900px">
-          <thead><tr>
-            ${['상태','작업이름','기간','도달','재생/노출','CPM','타겟','일예산','총지출₩','총지출$'].map(h=>`<th style="${thStyle}">${h}</th>`).join('')}
-          </tr></thead>
-          <tbody>
-            ${hasAds ? acc.ads.map(ad => {
-              const sc=ad.status==='완료'?'teal':ad.status==='진행중'?'blue':'amber';
-              return `<tr>
-                <td style="${tdStyle}"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${ad.status||'완료'}</span></td>
-                <td style="${tdStyle}">${ad.url?`<a href="${ad.url}" target="_blank" style="color:var(--blue-tx);text-decoration:none">${ad.name||''}</a>`:(ad.name||'—')}</td>
-                <td style="${tdStyle};color:var(--text-2)">${ad.startDate||''}${ad.endDate?` ~ ${ad.endDate}`:''}</td>
-                <td style="${tdStyle};text-align:right">${ad.reach||'—'}</td>
-                <td style="${tdStyle};text-align:right">${ad.playOrImp||'—'}</td>
-                <td style="${tdStyle};text-align:right">${ad.cpm||'—'}</td>
-                <td style="${tdStyle};font-size:11px;color:var(--text-2)">${ad.target||'—'}</td>
-                <td style="${tdStyle};text-align:right">${ad.dailyBudget||'—'}</td>
-                <td style="${tdStyle};text-align:right;font-weight:500">${ad.totalKRW||'—'}</td>
-                <td style="${tdStyle};text-align:right;color:var(--text-2)">${ad.totalUSD||'—'}</td>
-              </tr>`;
-            }).join('') : `<tr><td colspan="10" style="padding:1.5rem;text-align:center;color:var(--text-3)">광고 없음</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-  }).join('');
+  // 인스타 섹션 (새 DB)
+  const instaSection = insta ? (() => {
+    const accHtml = (insta.accounts||[]).map(acc=>{
+      const s=acc.summary||{};
+      return `<div style="margin-bottom:1.25rem">
+        <div style="font-size:13px;font-weight:700;padding:.6rem 1rem;background:var(--accent-light);border:1px solid var(--border);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0">${acc.name||'계정'}</div>
+        ${Object.values(s).some(v=>v)?`<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:.5rem 1rem;background:var(--bg);border:1px solid var(--border);border-bottom:none;font-size:12px">
+          ${s.limit?`<span>광고한도: <strong>${s.limit}</strong></span>`:''}${s.totalKRW?`<span>총지출₩: <strong>${s.totalKRW}</strong></span>`:''}${s.totalUSD?`<span>총지출$: <strong>${s.totalUSD}</strong></span>`:''}${s.remaining?`<span style="color:var(--teal-tx)">잔여: <strong>${s.remaining}</strong></span>`:''}
+        </div>`:''}
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius)">
+          <table style="width:100%;border-collapse:collapse;min-width:900px">
+            <thead><tr>${['상태','작업이름','기간','도달','재생/노출','CPM','타겟','일예산','총지출₩','총지출$'].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+            <tbody>${acc.ads?.length?acc.ads.map(ad=>{const sc=ad.status==='완료'?'teal':ad.status==='진행중'?'blue':'amber';return`<tr><td style="${tdS}"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${ad.status||'완료'}</span></td><td style="${tdS}">${ad.url?`<a href="${ad.url}" target="_blank" style="color:var(--blue-tx);text-decoration:none">${ad.name||''}</a>`:(ad.name||'—')}</td><td style="${tdS};color:var(--text-2)">${ad.startDate||''}${ad.endDate?` ~ ${ad.endDate}`:''}</td><td style="${tdS};text-align:right">${ad.reach||'—'}</td><td style="${tdS};text-align:right">${ad.playOrImp||'—'}</td><td style="${tdS};text-align:right">${ad.cpm||'—'}</td><td style="${tdS};font-size:11px">${ad.target||'—'}</td><td style="${tdS};text-align:right">${ad.dailyBudget||'—'}</td><td style="${tdS};text-align:right;font-weight:500">${ad.totalKRW||'—'}</td><td style="${tdS};text-align:right">${ad.totalUSD||'—'}</td></tr>`;}).join(''):`<tr><td colspan="10" style="padding:1.5rem;text-align:center;color:var(--text-3)">광고 없음</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="font-size:13px;font-weight:700;color:var(--text);padding-left:9px;border-left:3px solid #992248;margin-bottom:1rem">📸 인스타그램 광고</div>${accHtml}`;
+  })() : '';
 
-  // ��이버 섹션
-  const ns = r.naverSummary||{};
-  const naverHtml = (r.naverCampaigns?.length||Object.values(ns).some(v=>v)||r.naverMemo) ? `
-    <div class="divider"></div>
+  // 네이버 섹션
+  const naverSection = naver ? (() => {
+    const s=naver.summary||{};
+    return `<div class="divider"></div>
     <div style="margin-bottom:1.25rem">
       <div style="font-size:13px;font-weight:700;color:var(--text);padding-left:9px;border-left:3px solid #1a56a0;margin-bottom:.875rem">🔵 네이버 검색광고</div>
-      ${Object.values(ns).some(v=>v) ? `<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:.5rem .875rem;background:var(--blue-bg);border-radius:var(--radius);margin-bottom:.75rem;font-size:12px">
-        ${ns.limit?`<span>광고한도: <strong>${ns.limit}원</strong></span>`:''}
-        ${ns.totalImp?`<span>총노출: <strong>${ns.totalImp}</strong></span>`:''}
-        ${ns.totalClicks?`<span>총클릭: <strong>${ns.totalClicks}</strong></span>`:''}
-        ${ns.totalCost?`<span style="color:var(--blue-tx)">총지출: <strong>${ns.totalCost}원</strong></span>`:''}
-        ${ns.remaining?`<span style="color:var(--teal-tx)">잔여: <strong>${ns.remaining}원</strong></span>`:''}
-      </div>` : ''}
-      ${r.naverCampaigns?.length ? `<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.75rem">
-        <table style="width:100%;border-collapse:collapse;min-width:800px">
-          <thead><tr>${['상태','작업이름','기간','노출수','클릭수','CTR%','CPC(원)','캠페인유형','총비용','잔여'].map(h=>`<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>
-          <tbody>${r.naverCampaigns.map(c=>{
-            const sc=c.status==='완료'?'teal':c.status==='진행중'?'blue':'amber';
-            return `<tr>
-              <td style="${tdStyle}"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${c.status||'완료'}</span></td>
-              <td style="${tdStyle}">${c.name||'—'}</td>
-              <td style="${tdStyle};color:var(--text-2)">${c.startDate||''}${c.endDate?` ~ ${c.endDate}`:''}</td>
-              <td style="${tdStyle};text-align:right">${c.impressions||'—'}</td>
-              <td style="${tdStyle};text-align:right">${c.clicks||'—'}</td>
-              <td style="${tdStyle};text-align:right">${c.ctr||'—'}</td>
-              <td style="${tdStyle};text-align:right">${c.cpc||'—'}</td>
-              <td style="${tdStyle}">${c.campaignType||'—'}</td>
-              <td style="${tdStyle};text-align:right;font-weight:500">${c.totalCost||'—'}</td>
-              <td style="${tdStyle};text-align:right">${c.remaining||'—'}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>
-      </div>` : ''}
-      ${r.naverMemo?`<div style="font-size:12px;color:var(--text-2);padding:.625rem .875rem;background:var(--bg);border-radius:var(--radius);white-space:pre-wrap">${r.naverMemo}</div>`:''}
-    </div>` : '';
+      ${Object.values(s).some(v=>v)?`<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:.5rem .875rem;background:var(--blue-bg);border-radius:var(--radius);margin-bottom:.75rem;font-size:12px">
+        ${s.limit?`<span>광고한도: <strong>${s.limit}원</strong></span>`:''}${s.totalImp?`<span>총노출: <strong>${s.totalImp}</strong></span>`:''}${s.totalClicks?`<span>총클릭: <strong>${s.totalClicks}</strong></span>`:''}${s.totalCost?`<span style="color:var(--blue-tx)">총지출: <strong>${s.totalCost}원</strong></span>`:''}${s.remaining?`<span style="color:var(--teal-tx)">잔여: <strong>${s.remaining}원</strong></span>`:''}
+      </div>`:''}
+      ${naver.campaigns?.length?`<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.75rem"><table style="width:100%;border-collapse:collapse;min-width:800px"><thead><tr>${['상태','캠페인명','기간','노출수','클릭수','CTR%','CPC(원)','캠페인유형','총비용','잔여'].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead><tbody>${naver.campaigns.map(c=>{const sc=c.status==='완료'?'teal':c.status==='진행중'?'blue':'amber';return`<tr><td style="${tdS}"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${c.status||'완료'}</span></td><td style="${tdS}">${c.name||'—'}</td><td style="${tdS};color:var(--text-2)">${c.startDate||''}${c.endDate?` ~ ${c.endDate}`:''}</td><td style="${tdS};text-align:right">${c.impressions||'—'}</td><td style="${tdS};text-align:right">${c.clicks||'—'}</td><td style="${tdS};text-align:right">${c.ctr||'—'}</td><td style="${tdS};text-align:right">${c.cpc||'—'}</td><td style="${tdS}">${c.campaignType||'—'}</td><td style="${tdS};text-align:right;font-weight:500">${c.totalCost||'—'}</td><td style="${tdS};text-align:right">${c.remaining||'—'}</td></tr>`;}).join('')}</tbody></table></div>`:''}
+      ${naver.memo?`<div style="font-size:12px;color:var(--text-2);padding:.625rem .875rem;background:var(--bg);border-radius:var(--radius);white-space:pre-wrap">${naver.memo}</div>`:''}
+    </div>`;
+  })() : '';
 
   // 카카오 섹션
-  const ks = r.kakaoSummary||{};
-  const kakaoHtml = (r.kakaoAds?.length||Object.values(ks).some(v=>v)||r.kakaoMemo) ? `
-    <div class="divider"></div>
+  const kakaoSection = kakao ? (() => {
+    const s=kakao.summary||{};
+    return `<div class="divider"></div>
     <div style="margin-bottom:1.25rem">
       <div style="font-size:13px;font-weight:700;color:var(--text);padding-left:9px;border-left:3px solid #8a520a;margin-bottom:.875rem">💛 카카오 배너광고</div>
-      ${Object.values(ks).some(v=>v) ? `<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:.5rem .875rem;background:var(--amber-bg);border-radius:var(--radius);margin-bottom:.75rem;font-size:12px">
-        ${ks.limit?`<span>광고한도: <strong>${ks.limit}원</strong></span>`:''}
-        ${ks.totalImp?`<span>총노출: <strong>${ks.totalImp}</strong></span>`:''}
-        ${ks.totalClicks?`<span>총클릭: <strong>${ks.totalClicks}</strong></span>`:''}
-        ${ks.totalCost?`<span style="color:var(--amber-tx)">총지출: <strong>${ks.totalCost}원</strong></span>`:''}
-        ${ks.reward?`<span>보상환급: <strong>${ks.reward}원</strong></span>`:''}
-        ${ks.remaining?`<span style="color:var(--teal-tx)">잔여: <strong>${ks.remaining}원</strong></span>`:''}
-      </div>` : ''}
-      ${r.kakaoAds?.length ? `<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.75rem">
-        <table style="width:100%;border-collapse:collapse;min-width:900px">
-          <thead><tr>${['상태','작업이름','기간','노출수','클릭수','CTR%','도달수','CPC','도달당비용','광고비용(VAT)','보상환급'].map(h=>`<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>
-          <tbody>${r.kakaoAds.map(a=>{
-            const sc=a.status==='완료'?'teal':a.status==='진행중'?'blue':'amber';
-            return `<tr>
-              <td style="${tdStyle}"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${a.status||'완료'}</span></td>
-              <td style="${tdStyle}">${a.name||'—'}</td>
-              <td style="${tdStyle};color:var(--text-2)">${a.startDate||''}${a.endDate?` ~ ${a.endDate}`:''}</td>
-              <td style="${tdStyle};text-align:right">${a.impressions||'—'}</td>
-              <td style="${tdStyle};text-align:right">${a.clicks||'—'}</td>
-              <td style="${tdStyle};text-align:right">${a.ctr||'—'}</td>
-              <td style="${tdStyle};text-align:right">${a.reach||'—'}</td>
-              <td style="${tdStyle};text-align:right">${a.cpc||'—'}</td>
-              <td style="${tdStyle};text-align:right">${a.cpr||'—'}</td>
-              <td style="${tdStyle};text-align:right;font-weight:500">${a.totalCost||'—'}</td>
-              <td style="${tdStyle};text-align:right">${a.reward||'—'}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>
-      </div>` : ''}
-      ${r.kakaoMemo?`<div style="font-size:12px;color:var(--text-2);padding:.625rem .875rem;background:var(--bg);border-radius:var(--radius);white-space:pre-wrap">${r.kakaoMemo}</div>`:''}
-    </div>` : '';
+      ${Object.values(s).some(v=>v)?`<div style="display:flex;gap:1.5rem;flex-wrap:wrap;padding:.5rem .875rem;background:var(--amber-bg);border-radius:var(--radius);margin-bottom:.75rem;font-size:12px">
+        ${s.limit?`<span>광고한도: <strong>${s.limit}원</strong></span>`:''}${s.totalImp?`<span>총노출: <strong>${s.totalImp}</strong></span>`:''}${s.totalClicks?`<span>총클릭: <strong>${s.totalClicks}</strong></span>`:''}${s.totalCost?`<span style="color:var(--amber-tx)">총지출: <strong>${s.totalCost}원</strong></span>`:''}${s.reward?`<span>보상환급: <strong>${s.reward}원</strong></span>`:''}${s.remaining?`<span style="color:var(--teal-tx)">잔여: <strong>${s.remaining}원</strong></span>`:''}
+      </div>`:''}
+      ${kakao.ads?.length?`<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.75rem"><table style="width:100%;border-collapse:collapse;min-width:900px"><thead><tr>${['상태','광고명','기간','노출수','클릭수','CTR%','도달','CPC','CPR','총비용','보상'].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead><tbody>${kakao.ads.map(a=>{const sc=a.status==='완료'?'teal':a.status==='진행중'?'blue':'amber';return`<tr><td style="${tdS}"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${a.status||'완료'}</span></td><td style="${tdS}">${a.name||'—'}</td><td style="${tdS};color:var(--text-2)">${a.startDate||''}${a.endDate?` ~ ${a.endDate}`:''}</td><td style="${tdS};text-align:right">${a.impressions||'—'}</td><td style="${tdS};text-align:right">${a.clicks||'—'}</td><td style="${tdS};text-align:right">${a.ctr||'—'}</td><td style="${tdS};text-align:right">${a.reach||'—'}</td><td style="${tdS};text-align:right">${a.cpc||'—'}</td><td style="${tdS};text-align:right">${a.cpr||'—'}</td><td style="${tdS};text-align:right;font-weight:500">${a.totalCost||'—'}</td><td style="${tdS};text-align:right">${a.reward||'—'}</td></tr>`;}).join('')}</tbody></table></div>`:''}
+      ${kakao.memo?`<div style="font-size:12px;color:var(--text-2);padding:.625rem .875rem;background:var(--bg);border-radius:var(--radius);white-space:pre-wrap">${kakao.memo}</div>`:''}
+    </div>`;
+  })() : '';
 
   el.innerHTML = `
     <div style="margin-bottom:1.5rem">
       <button class="btn-secondary" onclick="adReportView='list';renderAdReportView()">← 목록</button>
     </div>
-    <div class="card">
+    <div id="adReportPrintArea" class="card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
         <div>
-          <h2 style="font-size:20px;margin-bottom:.25rem">${formatAdMonth(r.month)} 광고보고서</h2>
-          <div style="font-size:12px;color:var(--text-3)">${r.date||''} 작성</div>
+          <h2 style="font-size:20px;margin-bottom:.25rem">${formatAdMonth(month)} 통합보고서</h2>
+          <div style="font-size:12px;color:var(--text-3)">인스타그램 · 네이버 · 카카오 합산</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:22px;font-weight:700;color:var(--text)">${total>0?total.toLocaleString()+'원':'—'}</div>
-          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">총 집행금액 (인스타 합산)</div>
+          <div style="font-size:11px;color:var(--text-3)">총 집행금액</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:1.5rem">
-        <button class="btn-secondary" onclick="adReportEditId=${r.id};adReportView='write';renderAdReportView()">수정</button>
-        <button class="btn-secondary" style="color:var(--red-tx);border-color:var(--red-tx)" onclick="deleteAdReport(${r.id})">삭제</button>
+        <button class="btn-secondary" style="font-size:12px" onclick="downloadAdReportImg('${month}')">⬇ 이미지 저장</button>
+        <button class="btn-secondary" style="font-size:12px" onclick="printAdReport()">🖨 PDF 인쇄</button>
+        <button class="btn-secondary" style="font-size:12px;white-space:nowrap" onclick="copyAdReportDataNew('${month}')">📋 AI 분석용 복사</button>
       </div>
-
-      ${r.instaAccounts?.length ? `<div style="font-size:13px;font-weight:700;color:var(--text);padding-left:9px;border-left:3px solid #992248;margin-bottom:1rem">📸 인스타그램 광고 (카드자동결제)</div>${instaHtml}` : ''}
-      ${naverHtml}
-      ${kakaoHtml}
-      ${r.summary ? `<div class="divider"></div><div><div class="card-title" style="margin-bottom:.5rem">총평 / 특이사항</div><div style="font-size:13px;line-height:1.8;color:var(--text);white-space:pre-wrap">${r.summary}</div></div>` : ''}
-
-      <div class="divider"></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:.25rem">
-        <div style="font-size:12px;color:var(--text-3)">AI 분석이 필요하다면 데이터를 복사해 ChatGPT, Claude 등에 붙여넣으세요</div>
-        <button class="btn-secondary" style="font-size:12px;white-space:nowrap" onclick="copyAdReportData(${r.id})">📋 AI 분석용 데이터 복사</button>
-      </div>
+      ${instaSection}
+      ${naverSection}
+      ${kakaoSection}
     </div>`;
+}
+
+function printAdReport() {
+  window.print();
+}
+
+function downloadAdReportImg(month) {
+  const el = document.getElementById('adReportPrintArea');
+  if (!el) return;
+  toast('이미지 생성 중...');
+  html2canvas(el, { scale:2, backgroundColor:'#ffffff', useCORS:false, allowTaint:true, logging:false,
+    onclone: doc => { doc.body.style.fontFamily='sans-serif'; }
+  }).then(canvas => {
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.download = `광고보고서_${month}.jpg`;
+      a.href = url;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+      toast('이미지 저장 완료');
+    }, 'image/jpeg', 0.92);
+  }).catch(e => toast('저장 실패: '+e.message));
+}
+
+function copyAdReportDataNew(month) {
+  const insta=(DB.instaReports||[]).find(r=>r.month===month);
+  const naver=(DB.naverReports||[]).find(r=>r.month===month);
+  const kakao=(DB.kakaoReports||[]).find(r=>r.month===month);
+  let txt=`${formatAdMonth(month)} 통합 광고 데이터\n${'='.repeat(40)}\n\n`;
+  if(insta){
+    txt+='[인스타그램]\n';
+    (insta.accounts||[]).forEach(acc=>{
+      txt+=`▶ ${acc.name}\n`;
+      const s=acc.summary||{};
+      if(s.totalKRW)txt+=`  총지출: ${s.totalKRW}₩\n`;
+      (acc.ads||[]).forEach(ad=>txt+=`  - ${ad.name||''} 도달:${ad.reach||'-'} CPM:${ad.cpm||'-'} 지출:${ad.totalKRW||'-'}₩\n`);
+    });txt+='\n';
+  }
+  if(naver){
+    txt+='[네이버]\n';const s=naver.summary||{};
+    if(s.totalCost)txt+=`총지출: ${s.totalCost}원\n`;
+    (naver.campaigns||[]).forEach(c=>txt+=`- ${c.name||''} 클릭:${c.clicks||'-'} CPC:${c.cpc||'-'}원\n`);txt+='\n';
+  }
+  if(kakao){
+    txt+='[카카오]\n';const s=kakao.summary||{};
+    if(s.totalCost)txt+=`총지출: ${s.totalCost}원\n`;
+    (kakao.ads||[]).forEach(a=>txt+=`- ${a.name||''} 노출:${a.impressions||'-'} 클릭:${a.clicks||'-'} 지출:${a.totalCost||'-'}원\n`);txt+='\n';
+  }
+  txt+=`${'='.repeat(40)}\n위 데이터를 분석해주세요. 매체별 효율 비교, 다음 달 예산 배분 제안을 포함해주세요.`;
+  navigator.clipboard.writeText(txt).then(()=>toast('복사됐습니다. AI 툴에 붙여넣으세요!'));
 }
 
 function submitAdReport() {
