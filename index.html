@@ -282,6 +282,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     <div class="sidebar-logo" style="cursor:pointer" onclick="showPanel('home')">
       <div class="brand">Worksite</div>
       <div class="sub">팀 워크사이트</div>
+      <div id="syncStatus" style="font-size:10px;margin-top:4px;color:var(--text-3)"></div>
     </div>
 
     <div class="nav-section" style="display:flex;align-items:center;justify-content:space-between">
@@ -510,6 +511,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 // ═══ DATA ═══
 const ADMIN_PW = '1234';
 const API_URL = 'https://script.google.com/macros/s/AKfycbybpuqrd5F9LXOJyGyTSk3JqJf6AAKniyl-zhKYvuHpR2u0QnFPQS3o14KR_HPFFZlk/exec';
+const GS_URL = 'https://script.google.com/macros/s/AKfycbxpCsUJEWjBKJSqQFiIt7xscyrrBuWYVAZCu0wrO8XF7hRtME3_moALv9jC2RHuPh_y/exec';
 const COLORS = [
   {bg:'#e8f0fe',tx:'#1a56a0',name:'blue'},
   {bg:'#e0f5ee',tx:'#0e6b50',name:'teal'},
@@ -534,6 +536,24 @@ try {
   DB = JSON.parse(localStorage.getItem('teamreport_v3') || 'null') || { members: [], weeks: {} };
   if (!DB.members || !Array.isArray(DB.members)) DB = { members: [], weeks: {} };
 } catch(e) { DB = { members: [], weeks: {} }; }
+
+async function loadFromSheets() {
+  const url = localStorage.getItem('gs_url') || GS_URL;
+  try {
+    setSyncStatus('saving');
+    const r = await fetch(url + '?action=load');
+    const res = await r.json();
+    if (res.ok && res.data && res.data.members) {
+      DB = res.data;
+      if (!DB.weeks) DB.weeks = {};
+      localStorage.setItem('teamreport_v3', JSON.stringify(DB));
+      setSyncStatus('saved');
+      return true;
+    }
+  } catch(e) {}
+  setSyncStatus('error');
+  return false;
+}
 let wOff = 0;
 let selectedColor = COLORS[0];
 
@@ -549,7 +569,27 @@ if (DB.members.length === 0) {
   save();
 }
 
-function save() { localStorage.setItem('teamreport_v3', JSON.stringify(DB)); }
+function save() {
+  localStorage.setItem('teamreport_v3', JSON.stringify(DB));
+  const url = localStorage.getItem('gs_url') || GS_URL;
+  setSyncStatus('saving');
+  fetch(url, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'save', db: DB })
+  })
+  .then(r => r.json())
+  .then(res => setSyncStatus(res.ok ? 'saved' : 'error'))
+  .catch(() => setSyncStatus('error'));
+}
+
+function setSyncStatus(s) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  if (s === 'saving') { el.textContent = '● 저장 중...'; el.style.color = 'var(--amber-tx)'; }
+  else if (s === 'saved') { el.textContent = '● 동기화됨'; el.style.color = 'var(--teal-tx)'; }
+  else if (s === 'error') { el.textContent = '● 오프라인'; el.style.color = 'var(--red-tx)'; }
+  else { el.textContent = ''; }
+}
 function wKey(off=wOff) {
   const d = new Date(); d.setDate(d.getDate() + off*7);
   const y = d.getFullYear();
@@ -3646,8 +3686,9 @@ function changeAdminPw() {
 function renderSettingsApp(el) {
   const brand = localStorage.getItem('app_brand') || 'Worksite';
   const sub = localStorage.getItem('app_sub') || '팀 워크사이트';
+  const gsUrl = localStorage.getItem('gs_url') || GS_URL;
   el.innerHTML = `
-    <div class="card" style="max-width:420px">
+    <div class="card" style="max-width:480px;margin-bottom:1rem">
       <div class="card-title">앱 이름 설정</div>
       <div style="margin-bottom:.75rem">
         <label class="field-label">브랜드명</label>
@@ -3658,7 +3699,40 @@ function renderSettingsApp(el) {
         <input type="text" id="appSub" value="${sub}" placeholder="팀 워크사이트" style="width:100%">
       </div>
       <button class="btn-primary" onclick="saveAppSettings()">저장</button>
+    </div>
+    <div class="card" style="max-width:480px">
+      <div class="card-title">Google Sheets 연동</div>
+      <div style="margin-bottom:.75rem">
+        <label class="field-label">Apps Script URL</label>
+        <input type="text" id="gsUrlInput" value="${gsUrl}" placeholder="https://script.google.com/..." style="width:100%;font-size:11px">
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-primary" onclick="saveGsUrl()">저장</button>
+        <button class="btn-secondary" onclick="testGsConnection()">연결 테스트</button>
+        <span id="gsTestResult" style="font-size:12px"></span>
+      </div>
     </div>`;
+}
+
+async function saveGsUrl() {
+  const url = document.getElementById('gsUrlInput').value.trim();
+  if (!url) { toast('URL을 입력해주세요'); return; }
+  localStorage.setItem('gs_url', url);
+  toast('저장됐습니다');
+}
+
+async function testGsConnection() {
+  const url = document.getElementById('gsUrlInput').value.trim() || GS_URL;
+  const el = document.getElementById('gsTestResult');
+  el.textContent = '연결 중...'; el.style.color = 'var(--text-3)';
+  try {
+    const r = await fetch(url + '?action=load');
+    const res = await r.json();
+    if (res.ok) { el.textContent = '✅ 연결 성공'; el.style.color = 'var(--teal-tx)'; }
+    else { el.textContent = '❌ 응답 오류'; el.style.color = 'var(--red-tx)'; }
+  } catch(e) {
+    el.textContent = '❌ 연결 실패'; el.style.color = 'var(--red-tx)';
+  }
 }
 
 function applyAppSettings() {
@@ -3743,32 +3817,15 @@ function toast(msg) {
 
 // ═══ INIT ═══
 buildColorPicker();
-fetch(`${API_URL}?action=getMembers`)
-  .then(r => r.json())
-  .then(res => {
-    if (res.ok && res.data.length) {
-      DB.members = res.data.map((m, i) => ({
-        id: m['ID'] || 'mb_'+i,
-        name: m['이름'] || '',
-        status: m['상태']==='육아휴직' ? 'leave' : 'active',
-        color: COLORS[i % COLORS.length],
-        type: (m['이름']==='공수진') ? 'marketing' : 'design'
-      }));
-      save();
-    }
-    buildMemberTabs();
-    buildMemberPanels();
-    buildBoardNav();
-    applyAppSettings();
-    showPanel('notice');
-  })
-  .catch(() => {
-    buildMemberTabs();
-    buildMemberPanels();
-    buildBoardNav();
-    applyAppSettings();
-    showPanel('notice');
-  });
+// 구글 시트에서 데이터 로드 후 앱 초기화
+(async () => {
+  await loadFromSheets();
+  buildMemberTabs();
+  buildMemberPanels();
+  buildBoardNav();
+  applyAppSettings();
+  showPanel('notice');
+})();
 </script>
 </body>
 </html>
