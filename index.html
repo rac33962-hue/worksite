@@ -294,10 +294,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
       <div class="sub">팀 워크사이트</div>
     </div>
 
-    <div class="nav-section">📋 주간보고</div>
-    <div id="weekList"></div>
-
-    <div class="nav-section" style="margin-top:.5rem">📢 공지사항</div>
+    <div class="nav-section">📢 공지사항</div>
     <div class="nav-item" id="nav-notice" onclick="showPanel('notice')">
       <div class="nav-dot" style="background:#0e6b50"></div>공지사항
     </div>
@@ -308,6 +305,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     </div>
 
     <div class="nav-section" style="margin-top:.5rem">📊 광고</div>
+    <div class="nav-item" id="nav-adreport" onclick="showPanel('adreport')">
+      <div class="nav-dot" style="background:#0e6b50"></div>통합보고서
+    </div>
     <div class="nav-item" id="nav-insta" onclick="showPanel('insta')">
       <div class="nav-dot" style="background:#992248"></div>인스타그램
     </div>
@@ -317,9 +317,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     <div class="nav-item" id="nav-kakao" onclick="showPanel('kakao')">
       <div class="nav-dot" style="background:#ba7517"></div>카카오
     </div>
-    <div class="nav-item" id="nav-adreport" onclick="showPanel('adreport')">
-      <div class="nav-dot" style="background:#0e6b50"></div>통합보고서
-    </div>
+
+    <div class="nav-section" style="margin-top:.5rem">📋 주간보고</div>
+    <div id="weekList"></div>
     <div class="nav-item locked" id="nav-ad" onclick="openLocked('ad')">
       <div class="nav-dot" style="background:#4a3fb5"></div>AI 광고분석
     </div>
