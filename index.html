@@ -300,46 +300,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
     <!-- 업무일정관리 패널 -->
     <div id="panel-tasks" class="panel">
-      <div class="page-header"><h2>업무일정관리</h2><div class="subtitle">외주 업무 기간 및 지시사항 관리</div></div>
-      <div class="card" style="margin-bottom:1.5rem">
-        <div class="card-title">업무 등록</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
-          <div>
-            <label class="field-label">업무명</label>
-            <input type="text" id="taskTitle" placeholder="업무명을 입력하세요" style="width:100%">
-          </div>
-          <div>
-            <label class="field-label">발주처 / 클라이언트</label>
-            <input type="text" id="taskClient" placeholder="발주처명" style="width:100%">
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-bottom:.75rem">
-          <div>
-            <label class="field-label">시작일</label>
-            <input type="date" id="taskStart" style="width:100%">
-          </div>
-          <div>
-            <label class="field-label">마감일</label>
-            <input type="date" id="taskDeadline" style="width:100%">
-          </div>
-          <div>
-            <label class="field-label">상태</label>
-            <select id="taskStatus" style="width:100%">
-              <option>진행중</option>
-              <option>대기</option>
-              <option>완료</option>
-            </select>
-          </div>
-        </div>
-        <div style="margin-bottom:.75rem">
-          <label class="field-label">업무내용 / 지시사항</label>
-          <textarea id="taskContent" placeholder="업무 내용 및 지시사항을 입력하세요" style="min-height:90px"></textarea>
-        </div>
-        <div style="text-align:right">
-          <button class="btn-primary" onclick="addTask()">등록</button>
-        </div>
-      </div>
-      <div id="taskList"></div>
+      <div id="tasksContainer"></div>
     </div>
 
     <!-- MGR panel (locked) -->
@@ -1121,12 +1082,14 @@ function addMember() {
 
 // ═══ RELOAD ═══
 function reloadAll() {
-  if (['mgr','sum','notice'].includes(currentPanel)) {
+  if (['mgr','sum'].includes(currentPanel)) {
     if (unlockedPanels.has(currentPanel)) {
       showPanel(currentPanel);
       if(currentPanel==='mgr') loadMgrContent();
       if(currentPanel==='sum') buildSummary();
     } else { openLocked(currentPanel); }
+  } else if (currentPanel === 'notice' || currentPanel === 'tasks') {
+    // 주차 변경과 무관한 패널 — 갱신 불필요
   } else {
     showReportPanel();
   }
@@ -1137,6 +1100,9 @@ function showFirstMember() { showReportPanel(); }
 let noticeView = 'list';
 let noticeDetailId = null;
 let noticeEditId = null;
+let taskView = 'list';
+let taskDetailId = null;
+let taskEditId = null;
 
 function initNotice() {
   if (!DB.notices) DB.notices = [];
@@ -1316,68 +1282,200 @@ function deleteNotice(id) {
 // ═══ TASKS ═══
 function initTasks() {
   if (!DB.tasks) DB.tasks = [];
-  renderTasks();
+  taskView = 'list';
+  renderTaskView();
 }
 
-function addTask() {
+function renderTaskView() {
+  if (taskView === 'list') renderTaskList();
+  else if (taskView === 'write') renderTaskWrite();
+  else if (taskView === 'detail') renderTaskDetail();
+}
+
+function renderTaskList() {
+  const el = document.getElementById('tasksContainer');
+  const tasks = DB.tasks || [];
+  el.innerHTML = `
+    <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+      <div><h2>업무일정관리</h2><div class="subtitle">외주 업무 기간 및 지시사항 관리</div></div>
+      <button class="btn-primary" onclick="taskView='write';renderTaskView()">등록</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="notice-table">
+        <thead>
+          <tr>
+            <th style="width:50px;text-align:center">번호</th>
+            <th>업무명</th>
+            <th style="width:120px">발주처</th>
+            <th style="width:100px">마감일</th>
+            <th style="width:80px;text-align:center">상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tasks.length === 0
+            ? `<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:2.5rem">등록된 업무가 없습니다.</td></tr>`
+            : tasks.map((t, i) => {
+                const sc = t.status === '완료' ? 'teal' : t.status === '대기' ? 'amber' : 'blue';
+                return `<tr class="notice-row" onclick="taskDetailId=${t.id};taskView='detail';renderTaskView()">
+                  <td style="text-align:center">${tasks.length - i}</td>
+                  <td>${t.title}</td>
+                  <td style="color:var(--text-2);font-size:12px">${t.client || '—'}</td>
+                  <td style="color:var(--text-3);font-size:12px">${t.deadline || '—'}</td>
+                  <td style="text-align:center"><span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${t.status}</span></td>
+                </tr>`;
+              }).join('')
+          }
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderTaskWrite() {
+  const el = document.getElementById('tasksContainer');
+  const e = taskEditId ? (DB.tasks || []).find(t => t.id === taskEditId) : null;
+  el.innerHTML = `
+    <div class="page-header" style="margin-bottom:1.5rem">
+      <button class="btn-secondary" style="margin-bottom:.75rem" onclick="taskEditId=null;taskView='${taskEditId ? 'detail' : 'list'}';renderTaskView()">← ${taskEditId ? '상세' : '목록'}</button>
+      <h2>${e ? '업무 수정' : '업무 등록'}</h2>
+    </div>
+    <div class="card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+        <div>
+          <label class="field-label">업무명</label>
+          <input type="text" id="taskTitle" placeholder="업무명을 입력하세요" style="width:100%" value="${e ? e.title : ''}">
+        </div>
+        <div>
+          <label class="field-label">발주처 / 클라이언트</label>
+          <input type="text" id="taskClient" placeholder="발주처명" style="width:100%" value="${e ? (e.client||'') : ''}">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+        <div>
+          <label class="field-label">시작일</label>
+          <input type="date" id="taskStart" style="width:100%" value="${e ? (e.startDate||'') : ''}">
+        </div>
+        <div>
+          <label class="field-label">마감일</label>
+          <input type="date" id="taskDeadline" style="width:100%" value="${e ? (e.deadline||'') : ''}">
+        </div>
+        <div>
+          <label class="field-label">상태</label>
+          <select id="taskStatus" style="width:100%">
+            ${['진행중','대기','완료'].map(s => `<option${e && e.status===s?' selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:.75rem">
+        <label class="field-label">업무내용 / 지시사항</label>
+        <div id="taskEditor" style="height:280px;background:#fff;border-radius:0 0 var(--radius) var(--radius)"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:.5rem">
+        <button class="btn-secondary" onclick="taskEditId=null;taskView='list';renderTaskView()">취소</button>
+        <button class="btn-primary" onclick="submitTask()">저장</button>
+      </div>
+    </div>`;
+
+  setTimeout(() => {
+    window._taskQuill = new Quill('#taskEditor', {
+      theme: 'snow',
+      placeholder: '업무 내용 및 지시사항을 입력하세요...',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ color: [] }, { background: [] }],
+          [{ size: ['small', false, 'large', 'huge'] }],
+          [{ align: [] }],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['image', 'link'],
+          ['clean']
+        ]
+      }
+    });
+    if (e) window._taskQuill.root.innerHTML = e.content || '';
+    document.getElementById('taskEditor').addEventListener('paste', ev => {
+      const items = (ev.clipboardData || ev.originalEvent.clipboardData).items;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          ev.preventDefault();
+          const reader = new FileReader();
+          reader.onload = re => {
+            const range = window._taskQuill.getSelection(true);
+            window._taskQuill.insertEmbed(range.index, 'image', re.target.result);
+          };
+          reader.readAsDataURL(item.getAsFile());
+        }
+      }
+    });
+  }, 0);
+}
+
+function renderTaskDetail() {
+  const el = document.getElementById('tasksContainer');
+  const t = (DB.tasks || []).find(t => t.id === taskDetailId);
+  if (!t) { taskView = 'list'; renderTaskView(); return; }
+  const sc = t.status === '완료' ? 'teal' : t.status === '대기' ? 'amber' : 'blue';
+  el.innerHTML = `
+    <div style="margin-bottom:1.5rem">
+      <button class="btn-secondary" onclick="taskView='list';renderTaskView()">← 목록</button>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:.4rem">
+            <span class="badge" style="background:var(--${sc}-bg);color:var(--${sc}-tx)">${t.status}</span>
+            <h2 style="font-size:18px">${t.title}</h2>
+          </div>
+          <div style="display:flex;gap:1.5rem;font-size:12px;color:var(--text-3);margin-top:.25rem">
+            ${t.client ? `<span>발주처: ${t.client}</span>` : ''}
+            ${t.startDate ? `<span>시작: ${t.startDate}</span>` : ''}
+            ${t.deadline ? `<span style="color:var(--red-tx)">마감: ${t.deadline}</span>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn-secondary" onclick="taskEditId=${t.id};taskView='write';renderTaskView()">수정</button>
+          <button class="btn-secondary" style="color:var(--red-tx);border-color:var(--red-tx)" onclick="deleteTask(${t.id})">삭제</button>
+        </div>
+      </div>
+      <div class="notice-detail-content">${t.content || '<span style="color:var(--text-3)">내용 없음</span>'}</div>
+    </div>`;
+}
+
+function submitTask() {
   const title = document.getElementById('taskTitle').value.trim();
   const client = document.getElementById('taskClient').value.trim();
   const startDate = document.getElementById('taskStart').value;
   const deadline = document.getElementById('taskDeadline').value;
-  const content = document.getElementById('taskContent').value.trim();
+  const content = window._taskQuill ? window._taskQuill.root.innerHTML : '';
   const status = document.getElementById('taskStatus').value;
   if (!title) { toast('업무명을 입력해주세요'); return; }
   if (!DB.tasks) DB.tasks = [];
-  DB.tasks.unshift({ id: Date.now(), title, client, startDate, deadline, content, status });
-  save();
-  document.getElementById('taskTitle').value = '';
-  document.getElementById('taskClient').value = '';
-  document.getElementById('taskStart').value = '';
-  document.getElementById('taskDeadline').value = '';
-  document.getElementById('taskContent').value = '';
-  document.getElementById('taskStatus').value = '진행중';
-  renderTasks();
-  toast('업무가 등록됐습니다');
+  if (taskEditId) {
+    const t = DB.tasks.find(t => t.id === taskEditId);
+    if (t) { t.title = title; t.client = client; t.startDate = startDate; t.deadline = deadline; t.content = content; t.status = status; }
+    taskDetailId = taskEditId;
+    taskEditId = null;
+    save();
+    window._taskQuill = null;
+    taskView = 'detail';
+    renderTaskView();
+    toast('업무가 수정됐습니다');
+  } else {
+    DB.tasks.unshift({ id: Date.now(), title, client, startDate, deadline, content, status });
+    save();
+    window._taskQuill = null;
+    taskView = 'list';
+    renderTaskView();
+    toast('업무가 등록됐습니다');
+  }
 }
 
 function deleteTask(id) {
+  if (!confirm('업무를 삭제할까요?')) return;
   DB.tasks = DB.tasks.filter(t => t.id !== id);
   save();
-  renderTasks();
-}
-
-function updateTaskStatus(id, status) {
-  const t = DB.tasks.find(t => t.id === id);
-  if (t) { t.status = status; save(); }
-}
-
-function renderTasks() {
-  const el = document.getElementById('taskList');
-  if (!DB.tasks || DB.tasks.length === 0) {
-    el.innerHTML = '<p style="color:var(--text-3);font-size:13px">등록된 업무가 없습니다.</p>';
-    return;
-  }
-  el.innerHTML = DB.tasks.map(t => `
-    <div class="task-card">
-      <div class="task-header">
-        <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap">
-          <span class="task-title">${t.title}</span>
-          ${t.client ? `<span style="font-size:12px;color:var(--text-3)">${t.client}</span>` : ''}
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <select class="task-status-sel" onchange="updateTaskStatus(${t.id}, this.value)">
-            ${['진행중','대기','완료'].map(s => `<option${s===t.status?' selected':''}>${s}</option>`).join('')}
-          </select>
-          <button class="btn-icon" onclick="deleteTask(${t.id})">✕</button>
-        </div>
-      </div>
-      <div class="task-dates">
-        ${t.startDate ? `<span>시작: ${t.startDate}</span>` : ''}
-        ${t.deadline ? `<span style="color:var(--red-tx)">마감: ${t.deadline}</span>` : ''}
-      </div>
-      ${t.content ? `<div class="task-body">${t.content}</div>` : ''}
-    </div>
-  `).join('');
+  taskView = 'list';
+  renderTaskView();
+  toast('업무가 삭제됐습니다');
 }
 
 // ═══ TOAST ═══
