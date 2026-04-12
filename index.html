@@ -1639,6 +1639,12 @@ function renderAdReportDetail() {
       ${naverHtml}
       ${kakaoHtml}
       ${r.summary ? `<div class="divider"></div><div><div class="card-title" style="margin-bottom:.5rem">총평 / 특이사항</div><div style="font-size:13px;line-height:1.8;color:var(--text);white-space:pre-wrap">${r.summary}</div></div>` : ''}
+
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:.25rem">
+        <div style="font-size:12px;color:var(--text-3)">AI 분석이 필요하다면 데이터를 복사해 ChatGPT, Claude 등에 붙여넣으세요</div>
+        <button class="btn-secondary" style="font-size:12px;white-space:nowrap" onclick="copyAdReportData(${r.id})">📋 AI 분석용 데이터 복사</button>
+      </div>
     </div>`;
 }
 
@@ -1700,6 +1706,79 @@ function submitAdReport() {
     save(); adReportView='list'; renderAdReportView();
     toast('보고서가 등록됐습니다');
   }
+}
+
+function copyAdReportData(id) {
+  const r = (DB.adReports||[]).find(r => r.id === id);
+  if (!r) return;
+  let txt = `${formatAdMonth(r.month)} 광고 집행 데이터\n${'='.repeat(40)}\n\n`;
+
+  // 인스타
+  if (r.instaAccounts?.length) {
+    txt += `[인스타그램 광고]\n`;
+    r.instaAccounts.forEach(acc => {
+      txt += `\n▶ 계정: ${acc.name}\n`;
+      const s = acc.summary||{};
+      if (s.limit) txt += `  광고한도: ${s.limit}\n`;
+      if (s.dailyBudget) txt += `  일예산합: ${s.dailyBudget}\n`;
+      if (s.adCost) txt += `  광고비용: ${s.adCost}\n`;
+      if (s.totalKRW) txt += `  총지출(₩): ${s.totalKRW}\n`;
+      if (s.totalUSD) txt += `  총지출($): ${s.totalUSD}\n`;
+      if (s.remaining) txt += `  잔여: ${s.remaining}\n`;
+      if (acc.ads?.length) {
+        txt += `  광고 목록:\n`;
+        acc.ads.forEach(ad => {
+          txt += `  - ${ad.name||''} (${ad.status||''}) ${ad.startDate||''}${ad.endDate?`~${ad.endDate}`:''} / 도달:${ad.reach||'-'} CPM:${ad.cpm||'-'} 총지출:${ad.totalKRW||'-'}₩ ${ad.totalUSD||'-'}$\n`;
+        });
+      }
+    });
+    txt += '\n';
+  }
+
+  // 네이버
+  const ns = r.naverSummary||{};
+  if (r.naverCampaigns?.length || Object.values(ns).some(v=>v)) {
+    txt += `[네이버 검색광고]\n`;
+    if (ns.limit) txt += `  광고한도: ${ns.limit}원\n`;
+    if (ns.totalImp) txt += `  총노출: ${ns.totalImp}\n`;
+    if (ns.totalClicks) txt += `  총클릭: ${ns.totalClicks}\n`;
+    if (ns.totalCost) txt += `  총지출: ${ns.totalCost}원\n`;
+    if (ns.remaining) txt += `  잔여: ${ns.remaining}원\n`;
+    if (r.naverCampaigns?.length) {
+      txt += `  캠페인 목록:\n`;
+      r.naverCampaigns.forEach(c => {
+        txt += `  - ${c.name||''} (${c.status||''}) 노출:${c.impressions||'-'} 클릭:${c.clicks||'-'} CTR:${c.ctr||'-'}% CPC:${c.cpc||'-'}원 총비용:${c.totalCost||'-'}원\n`;
+      });
+    }
+    if (r.naverMemo) txt += `  메모: ${r.naverMemo}\n`;
+    txt += '\n';
+  }
+
+  // 카카오
+  const ks = r.kakaoSummary||{};
+  if (r.kakaoAds?.length || Object.values(ks).some(v=>v)) {
+    txt += `[카카오 배너광고]\n`;
+    if (ks.limit) txt += `  광고한도: ${ks.limit}원\n`;
+    if (ks.totalImp) txt += `  총노출: ${ks.totalImp}\n`;
+    if (ks.totalClicks) txt += `  총클릭: ${ks.totalClicks}\n`;
+    if (ks.totalCost) txt += `  총지출: ${ks.totalCost}원\n`;
+    if (ks.reward) txt += `  보상환급: ${ks.reward}원\n`;
+    if (ks.remaining) txt += `  잔여: ${ks.remaining}원\n`;
+    if (r.kakaoAds?.length) {
+      txt += `  광고 목록:\n`;
+      r.kakaoAds.forEach(a => {
+        txt += `  - ${a.name||''} (${a.status||''}) 노출:${a.impressions||'-'} 클릭:${a.clicks||'-'} CTR:${a.ctr||'-'}% 총비용:${a.totalCost||'-'}원\n`;
+      });
+    }
+    if (r.kakaoMemo) txt += `  메모: ${r.kakaoMemo}\n`;
+    txt += '\n';
+  }
+
+  if (r.summary) txt += `[총평]\n${r.summary}\n\n`;
+
+  txt += `${'='.repeat(40)}\n위 데이터를 분석해주세요.\n매체별 효율 비교, 잘된 광고와 아쉬운 광고, 다음 달 예산 배분 제안을 포함해주세요.`;
+
+  navigator.clipboard.writeText(txt).then(() => toast('데이터가 복사됐습니다. AI 툴에 붙여넣으세요!'));
 }
 
 function deleteAdReport(id) {
