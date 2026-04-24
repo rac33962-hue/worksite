@@ -544,9 +544,14 @@ async function loadFromSheets() {
     const r = await fetch(url + '?action=load');
     const res = await r.json();
     if (res.ok && res.data && res.data.members) {
-      DB = res.data;
-      if (!DB.weeks) DB.weeks = {};
-      localStorage.setItem('teamreport_v3', JSON.stringify(DB));
+      const localData = JSON.parse(localStorage.getItem('teamreport_v3') || '{}');
+      const localTime = new Date(localData._savedAt || 0).getTime();
+      const gsTime = new Date(res.data._savedAt || 0).getTime();
+      if (gsTime > localTime) {
+        DB = res.data;
+        if (!DB.weeks) DB.weeks = {};
+        localStorage.setItem('teamreport_v3', JSON.stringify(DB));
+      }
       setSyncStatus('saved');
       return true;
     }
@@ -570,6 +575,7 @@ if (DB.members.length === 0) {
 }
 
 function save() {
+  DB._savedAt = new Date().toISOString();
   localStorage.setItem('teamreport_v3', JSON.stringify(DB));
   const url = localStorage.getItem('gs_url') || GS_URL;
   setSyncStatus('saving');
