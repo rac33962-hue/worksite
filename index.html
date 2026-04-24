@@ -907,7 +907,7 @@ function buildMktForm(d) {
       <div class="card-title">기타 주요 업무</div>
       <textarea id="mktEtc" placeholder="광고, SNS, 언론기사, 온라인 단속 등...">${d.mktEtc||''}</textarea>
     </div>
-    <button class="btn-primary btn-full" style="max-width:200px" onclick="const mid = currentPanel;()">저장</button>`;
+    <button class="btn-primary btn-full" style="max-width:200px" onclick="saveMktPanel()">저장</button>`;
 }
 
 function const mid = currentPanel;() {
@@ -992,7 +992,7 @@ function buildDesignForm(d) {
       <div class="card-title">기타 / 이슈</div>
       <textarea id="designNote" placeholder="컨펌 대기, 진행 이슈 등...">${d.note||''}</textarea>
     </div>
-    <button class="btn-primary btn-full" style="max-width:200px" onclick="const mid = currentPanel;()">저장</button>`;
+    <button class="btn-primary btn-full" style="max-width:200px" onclick="saveDesignPanel()">저장</button>`;
 }
 
 function designRowHtml(brand, done, wip) {
