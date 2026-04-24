@@ -945,7 +945,7 @@ function expRowHtml(name, qty, status) {
 }
 function addExpRow() { document.getElementById('expRows').insertAdjacentHTML('beforeend', expRowHtml('','','진행중')); }
 
-function const mid = currentMember;() {
+function saveMktPanel() {
   const mid = currentPanel;
   const d = getMemberData(mid);
   const customStores = d.customStores || [];
@@ -1014,7 +1014,7 @@ function addDesignRow(type) {
   if (type==='cur') document.getElementById('curBrandRows').insertAdjacentHTML('beforeend', designRowHtml(BRANDS_DESIGN[0],'',''));
   else document.getElementById('nextBrandRows').insertAdjacentHTML('beforeend', nextRowHtml(BRANDS_DESIGN[0],''));
 }
-function const mid = currentMember;() {
+function saveDesignPanel() {
   const mid = currentPanel;
   const brands=[]; document.querySelectorAll('#curBrandRows .brand-row').forEach(r=>{
     const ins=r.querySelectorAll('input');
