@@ -896,7 +896,7 @@ function buildMktForm(d) {
     <div class="card">
       <div class="card-title">스마트스토어 매출</div>
       <div id="storeList">${storeListHtml}</div>
-      <button class="btn-add" style="margin-top:8px" onclick="const mid = currentMember;()">+ 스토어 추가</button>
+      <button class="btn-add" style="margin-top:8px" onclick="addStoreRow()">+ 스토어 추가</button>
     </div>
     <div class="card">
       <div class="card-title">체험단 현황</div>
@@ -911,10 +911,9 @@ function buildMktForm(d) {
 }
 
 function addStoreRow() {
-  const mid = currentMember;
   const name = prompt('추가할 스토어 이름을 입력하세요');
   if (!name || !name.trim()) return;
-  const mid = currentPanel;
+  const mid = currentMember;
   const d = getMemberData(mid);
   const custom = d.customStores || [];
   if ([...STORES_FIXED, ...custom].includes(name.trim())) { toast('이미 존재하는 스토어입니다'); return; }
@@ -926,7 +925,7 @@ function addStoreRow() {
 function removeStore(encodedName) {
   const name = decodeURIComponent(encodedName);
   if (!confirm(`"${name}" 삭제할까요?`)) return;
-  const mid = currentPanel;
+  const mid = currentMember;
   const d = getMemberData(mid);
   const custom = (d.customStores || []).filter(s => s !== name);
   const storeData = d.storeData || {};
@@ -947,7 +946,7 @@ function expRowHtml(name, qty, status) {
 function addExpRow() { document.getElementById('expRows').insertAdjacentHTML('beforeend', expRowHtml('','','진행중')); }
 
 function saveMktPanel() {
-  const mid = currentPanel;
+  const mid = currentMember;
   const d = getMemberData(mid);
   const customStores = d.customStores || [];
   const allStores = [...STORES_FIXED, ...customStores];
@@ -1016,7 +1015,7 @@ function addDesignRow(type) {
   else document.getElementById('nextBrandRows').insertAdjacentHTML('beforeend', nextRowHtml(BRANDS_DESIGN[0],''));
 }
 function saveDesignPanel() {
-  const mid = currentPanel;
+  const mid = currentMember;
   const brands=[]; document.querySelectorAll('#curBrandRows .brand-row').forEach(r=>{
     const ins=r.querySelectorAll('input');
     if(ins[0]?.value) brands.push({brand:ins[0].value,done:ins[1]?.value||'',wip:ins[2]?.value||''});
