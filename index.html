@@ -544,20 +544,25 @@ async function loadFromSheets() {
     const r = await fetch(url + '?action=load');
     const res = await r.json();
     if (res.ok && res.data && res.data.members) {
-      const localData = JSON.parse(localStorage.getItem('teamreport_v3') || '{}');
-      const localTime = new Date(localData._savedAt || 0).getTime();
-      const gsTime = new Date(res.data._savedAt || 0).getTime();
-      if (gsTime > localTime) {
-        DB = res.data;
-        if (!DB.weeks) DB.weeks = {};
-        localStorage.setItem('teamreport_v3', JSON.stringify(DB));
-      }
+      DB = res.data;
+      if (!DB.weeks) DB.weeks = {};
+      localStorage.setItem('teamreport_v3', JSON.stringify(DB));
       setSyncStatus('saved');
       return true;
     }
   } catch(e) {}
   setSyncStatus('error');
   return false;
+}
+
+async function fetchGSData() {
+  const url = localStorage.getItem('gs_url') || GS_URL;
+  try {
+    const r = await fetch(url + '?action=load');
+    const res = await r.json();
+    if (res.ok && res.data && res.data.members) return res.data;
+  } catch(e) {}
+  return null;
 }
 let wOff = 0;
 let selectedColor = COLORS[0];
@@ -575,13 +580,31 @@ if (DB.members.length === 0) {
 }
 
 function save() {
-  DB._savedAt = new Date().toISOString();
   localStorage.setItem('teamreport_v3', JSON.stringify(DB));
   const url = localStorage.getItem('gs_url') || GS_URL;
   setSyncStatus('saving');
-  fetch(url, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'save', db: DB })
+
+  // GS 최신 데이터를 먼저 가져와서 병합 후 저장
+  fetchGSData().then(gsData => {
+    let merged = DB;
+    if (gsData) {
+      // GS의 weeks 데이터를 베이스로, 현재 DB의 weeks를 병합
+      const mergedWeeks = Object.assign({}, gsData.weeks || {});
+      Object.keys(DB.weeks || {}).forEach(wk => {
+        const gsWeek = mergedWeeks[wk] || {};
+        const localWeek = DB.weeks[wk] || {};
+        mergedWeeks[wk] = Object.assign({}, gsWeek, {
+          members: Object.assign({}, gsWeek.members || {}, localWeek.members || {})
+        });
+      });
+      merged = Object.assign({}, gsData, { weeks: mergedWeeks, members: DB.members });
+      DB = merged;
+      localStorage.setItem('teamreport_v3', JSON.stringify(DB));
+    }
+    return fetch(url, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'save', db: merged })
+    });
   })
   .then(r => r.json())
   .then(res => setSyncStatus(res.ok ? 'saved' : 'error'))
