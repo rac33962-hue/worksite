@@ -541,7 +541,7 @@ async function loadFromSheets() {
   const url = localStorage.getItem('gs_url') || GS_URL;
   try {
     setSyncStatus('saving');
-    const r = await fetch(url + '?action=load');
+    const r = await fetch(url + '?action=load&t=' + Date.now());
     const res = await r.json();
     if (res.ok && res.data && res.data.members) {
       DB = res.data;
@@ -558,7 +558,7 @@ async function loadFromSheets() {
 async function fetchGSData() {
   const url = localStorage.getItem('gs_url') || GS_URL;
   try {
-    const r = await fetch(url + '?action=load');
+    const r = await fetch(url + '?action=load&t=' + Date.now());
     const res = await r.json();
     if (res.ok && res.data && res.data.members) return res.data;
   } catch(e) {}
@@ -3755,7 +3755,7 @@ async function testGsConnection() {
   const el = document.getElementById('gsTestResult');
   el.textContent = '연결 중...'; el.style.color = 'var(--text-3)';
   try {
-    const r = await fetch(url + '?action=load');
+    const r = await fetch(url + '?action=load&t=' + Date.now());
     const res = await r.json();
     if (res.ok) { el.textContent = '✅ 연결 성공'; el.style.color = 'var(--teal-tx)'; }
     else { el.textContent = '❌ 응답 오류'; el.style.color = 'var(--red-tx)'; }
