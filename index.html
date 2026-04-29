@@ -2855,11 +2855,11 @@ function renderDashboard() {
   const dateStr = now.toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
 
   const taskInProgress = (DB.tasks || []).filter(t => t.status === '진행중').length;
-  const noticeCount = (DB.notices || []).length;
+  const noticeCount = (DB.notices || []).filter(n => !n._deleted).length;
   const activeMembers = DB.members.filter(m => m.status === 'active').length;
   const adLogCount = (DB.adAnalysisLogs || []).length;
 
-  const recentNotices = [...(DB.notices || [])].sort((a,b) => b.id - a.id).slice(0, 4);
+  const recentNotices = [...(DB.notices || [])].filter(n => !n._deleted).sort((a,b) => b.id - a.id).slice(0, 4);
   const deadlineTasks = (DB.tasks || [])
     .filter(t => t.status !== '완료' && t.deadline)
     .sort((a,b) => a.deadline.localeCompare(b.deadline))
@@ -3204,7 +3204,7 @@ function renderNoticeView() {
 
 function renderNoticeList() {
   const el = document.getElementById('noticeContainer');
-  const notices = DB.notices || [];
+  const notices = (DB.notices || []).filter(n => !n._deleted);
   const sorted = [...notices].sort((a,b) => b.important - a.important || b.id - a.id);
   let num = sorted.filter(n => !n.important).length;
   el.innerHTML = `
@@ -3358,7 +3358,8 @@ function submitNotice() {
 }
 
 function deleteNotice(id) {
-  DB.notices = DB.notices.filter(n => n.id !== id);
+  const n = (DB.notices || []).find(n => n.id === id);
+  if (n) n._deleted = true;
   save();
   noticeView = 'list';
   renderNoticeView();
