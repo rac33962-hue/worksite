@@ -1022,7 +1022,7 @@ function buildDesignForm(d) {
       <div class="col-hdr brand-row-3" style="padding-right:28px">
         <span>브랜드</span><span style="text-align:center">완료</span><span style="text-align:center">미작업</span>
       </div>
-      <div id="curBrandRows">${brands.map(b=>designRowHtml(b.brand,b.done,b.wip)).join('')}</div>
+      <div id="curBrandRows">${brands.map(b=>designRowHtml(b.brand,b.done,b.wip,b.memo)).join('')}</div>
       <button class="btn-add" onclick="addDesignRow('cur')">+ 브랜드 추가</button>
     </div>
     <div class="card">
@@ -1030,7 +1030,7 @@ function buildDesignForm(d) {
       <div class="col-hdr" style="display:grid;grid-template-columns:1fr 70px 28px;gap:8px;padding-right:0;margin-bottom:4px">
         <span>브랜드</span><span style="text-align:center">예정 수량</span>
       </div>
-      <div id="nextBrandRows">${next.map(b=>nextRowHtml(b.brand,b.done)).join('')}</div>
+      <div id="nextBrandRows">${next.map(b=>nextRowHtml(b.brand,b.done,b.memo)).join('')}</div>
       <button class="btn-add" onclick="addDesignRow('next')">+ 브랜드 추가</button>
     </div>
     <div class="card">
@@ -1040,21 +1040,27 @@ function buildDesignForm(d) {
     <button class="btn-primary btn-full" style="max-width:200px" onclick="saveDesignPanel()">저장</button>`;
 }
 
-function designRowHtml(brand, done, wip) {
+function designRowHtml(brand, done, wip, memo) {
   const opts = BRANDS_DESIGN.map(b => `<option${b===brand?' selected':''}>${b}</option>`).join('');
-  return `<div class="brand-row brand-row-3" style="margin-bottom:7px">
-    <select style="font-size:13px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)">${opts}</select>
-    <input type="number" value="${done||''}" placeholder="0">
-    <input type="number" value="${wip||''}" placeholder="0">
-    <button class="btn-icon" onclick="this.parentNode.remove()">×</button>
+  return `<div style="margin-bottom:10px">
+    <div class="brand-row brand-row-3" style="margin-bottom:4px">
+      <select style="font-size:13px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)">${opts}</select>
+      <input type="number" value="${done||''}" placeholder="0">
+      <input type="number" value="${wip||''}" placeholder="0">
+      <button class="btn-icon" onclick="this.parentNode.parentNode.remove()">×</button>
+    </div>
+    <input type="text" value="${memo||''}" placeholder="메모 (선택)" style="width:100%;font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text-2)">
   </div>`;
 }
-function nextRowHtml(brand, done) {
+function nextRowHtml(brand, done, memo) {
   const opts = BRANDS_DESIGN.map(b => `<option${b===brand?' selected':''}>${b}</option>`).join('');
-  return `<div class="brand-row" style="grid-template-columns:1fr 70px 28px;margin-bottom:7px">
-    <select style="font-size:13px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)">${opts}</select>
-    <input type="number" value="${done||''}" placeholder="0">
-    <button class="btn-icon" onclick="this.parentNode.remove()">×</button>
+  return `<div style="margin-bottom:10px">
+    <div class="brand-row" style="grid-template-columns:1fr 70px 28px;margin-bottom:4px">
+      <select style="font-size:13px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)">${opts}</select>
+      <input type="number" value="${done||''}" placeholder="0">
+      <button class="btn-icon" onclick="this.parentNode.parentNode.remove()">×</button>
+    </div>
+    <input type="text" value="${memo||''}" placeholder="메모 (선택)" style="width:100%;font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text-2)">
   </div>`;
 }
 function addDesignRow(type) {
@@ -1063,13 +1069,13 @@ function addDesignRow(type) {
 }
 function saveDesignPanel() {
   const mid = currentMember;
-  const brands=[]; document.querySelectorAll('#curBrandRows .brand-row').forEach(r=>{
-    const sel=r.querySelector('select'); const ins=r.querySelectorAll('input');
-    if(sel?.value) brands.push({brand:sel.value, done:ins[0]?.value||'', wip:ins[1]?.value||''});
+  const brands=[]; document.querySelectorAll('#curBrandRows > div').forEach(r=>{
+    const sel=r.querySelector('select'); const numIns=r.querySelectorAll('input[type="number"]'); const memoIn=r.querySelector('input[type="text"]');
+    if(sel?.value) brands.push({brand:sel.value, done:numIns[0]?.value||'', wip:numIns[1]?.value||'', memo:memoIn?.value||''});
   });
-  const nextBrands=[]; document.querySelectorAll('#nextBrandRows .brand-row').forEach(r=>{
-    const sel=r.querySelector('select'); const ins=r.querySelectorAll('input');
-    if(sel?.value) nextBrands.push({brand:sel.value, done:ins[0]?.value||''});
+  const nextBrands=[]; document.querySelectorAll('#nextBrandRows > div').forEach(r=>{
+    const sel=r.querySelector('select'); const numIns=r.querySelectorAll('input[type="number"]'); const memoIn=r.querySelector('input[type="text"]');
+    if(sel?.value) nextBrands.push({brand:sel.value, done:numIns[0]?.value||'', memo:memoIn?.value||''});
   });
   setMemberData(mid, {brands, nextBrands, note: document.getElementById('designNote')?.value||''});
   toast('저장 완료');
