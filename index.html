@@ -1221,11 +1221,12 @@ function buildSummary() {
   // Design
   html += `<div class="sum-section"><div class="sum-section-title">디자인 — 이번 주 브랜드별 작업</div>`;
   if (Object.keys(dsummary).length) {
-    html += `<table class="sum-table"><thead><tr><th>브랜드</th><th style="width:80px;text-align:center">완료</th><th style="width:80px;text-align:center">미작업</th></tr></thead><tbody>`;
-    Object.entries(dsummary).forEach(([b,v]) => {
-      html += `<tr><td>${b}</td><td style="text-align:center">${v.done}</td><td style="text-align:center">${v.wip}</td></tr>`;
-    });
-    html += `</tbody></table>`;
+    const totalWip = Object.values(dsummary).reduce((a,v)=>a+v.wip,0);
+    const tags = Object.entries(dsummary)
+      .filter(([,v]) => v.done > 0)
+      .map(([b,v]) => `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:13px;font-weight:500">${b} <span style="color:var(--teal-tx);font-weight:700">${v.done}건</span></span>`).join('');
+    html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${tags || '<span style="color:var(--text-3);font-size:13px">완료 건수 없음</span>'}</div>`;
+    html += `<div style="font-size:13px;color:var(--text-2)">총 완료 <strong style="color:var(--text)">${totalDesign}건</strong>${totalWip > 0 ? ` &nbsp;·&nbsp; 미작업 <span style="color:var(--amber-tx)">${totalWip}건</span>` : ''}</div>`;
   } else html += `<div class="sum-empty">입력된 데이터 없음</div>`;
   html += `</div>`;
 
