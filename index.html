@@ -418,8 +418,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
       <div id="mgrLock"></div>
       <div id="mgrContent" style="display:none">
         <div class="page-header">
-          <h2>관리자 메모</h2>
-          <div class="subtitle">비공개 — 관리자만 열람 가능</div>
+          <div>
+            <h2>관리자 메모</h2>
+            <div class="subtitle">비공개 — 관리자만 열람 가능</div>
+          </div>
+          <select id="mgrWeekSelect" style="font-size:13px;padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)" onchange="onMgrWeekSelect(this.value)"></select>
         </div>
         <div class="card">
           <div class="card-title">이번 주 특이사항 / 공유사항</div>
@@ -440,8 +443,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
       <div id="sumLock"></div>
       <div id="sumContent" style="display:none">
         <div class="page-header">
-          <h2>최종 요약본</h2>
-          <div class="subtitle" id="sumSubtitle">—</div>
+          <div>
+            <h2>최종 요약본</h2>
+            <div class="subtitle" id="sumSubtitle">—</div>
+          </div>
+          <select id="sumWeekSelect" style="font-size:13px;padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)" onchange="onSumWeekSelect(this.value)"></select>
         </div>
         <div class="sum-wrap">
           <div class="export-btns">
@@ -1127,7 +1133,23 @@ function openAdLogs() {
   }
 }
 
+function populateWeekSelectEl(selId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const allKeys = [...new Set([...getSavedWeekKeys(), wKey(0)])].sort().reverse();
+  const cur = wKey();
+  sel.innerHTML = allKeys.map(k => `<option value="${k}"${k===cur?' selected':''}>${wKeyToWeekLabel(k)}</option>`).join('');
+}
+function onMgrWeekSelect(val) {
+  for (let i = -104; i <= 52; i++) { if (wKey(i) === val) { wOff = i; break; } }
+  loadMgrContent();
+}
+function onSumWeekSelect(val) {
+  for (let i = -104; i <= 52; i++) { if (wKey(i) === val) { wOff = i; break; } }
+  buildSummary();
+}
 function loadMgrContent() {
+  populateWeekSelectEl('mgrWeekSelect');
   const d = gw();
   document.getElementById('mgrNote').value = d.mgrNote || '';
   document.getElementById('mgrNext').value = d.mgrNext || '';
@@ -1139,6 +1161,7 @@ function saveMgr() {
 
 // ═══ SUMMARY ═══
 function buildSummary() {
+  populateWeekSelectEl('sumWeekSelect');
   document.getElementById('sumSubtitle').textContent = wRange();
   const w = gw();
   let totalSales = 0;
