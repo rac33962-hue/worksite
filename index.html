@@ -2913,14 +2913,14 @@ function renderDashboard() {
   const now = new Date();
   const dateStr = now.toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
 
-  const taskInProgress = (DB.tasks || []).filter(t => t.status === '진행중').length;
+  const taskInProgress = (DB.tasks || []).filter(t => !t._deleted && t.status === '진행중').length;
   const noticeCount = (DB.notices || []).filter(n => !n._deleted).length;
   const activeMembers = DB.members.filter(m => m.status === 'active').length;
   const adLogCount = (DB.adAnalysisLogs || []).length;
 
   const recentNotices = [...(DB.notices || [])].filter(n => !n._deleted).sort((a,b) => b.id - a.id).slice(0, 4);
   const deadlineTasks = (DB.tasks || [])
-    .filter(t => t.status !== '완료' && t.deadline)
+    .filter(t => !t._deleted && t.status !== '완료' && t.deadline)
     .sort((a,b) => a.deadline.localeCompare(b.deadline))
     .slice(0, 4);
   const recentAdLogs = [...(DB.adAnalysisLogs || [])].slice(0, 3);
@@ -3440,7 +3440,7 @@ function renderTaskView() {
 
 function renderTaskList() {
   const el = document.getElementById('tasksContainer');
-  const tasks = DB.tasks || [];
+  const tasks = (DB.tasks || []).filter(t => !t._deleted);
   el.innerHTML = `
     <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
       <div><h2>업무일정관리</h2><div class="subtitle">외주 업무 기간 및 지시사항 관리</div></div>
@@ -3617,7 +3617,8 @@ function submitTask() {
 
 function deleteTask(id) {
   if (!confirm('업무를 삭제할까요?')) return;
-  DB.tasks = DB.tasks.filter(t => t.id !== id);
+  const t = (DB.tasks || []).find(t => t.id === id);
+  if (t) t._deleted = true;
   save();
   taskView = 'list';
   renderTaskView();
