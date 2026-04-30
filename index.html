@@ -1242,11 +1242,12 @@ function buildSummary() {
   html += `</tbody></table></div>`;
 
   if (expLines.length) {
-    html += `<div class="sum-section"><div class="sum-section-title">마케팅 — 체험단 현황</div><div class="sum-lines">${expLines.join('\n')}</div></div>`;
+    html += `<div class="sum-section"><div class="sum-section-title">마케팅 — 체험단 현황 (총 ${totalExp}건)</div><div class="sum-lines" style="font-size:12px;color:var(--text-2)">${expLines.join(' &nbsp;·&nbsp; ')}</div></div>`;
   }
 
   if (mktData.mktEtc) {
-    html += `<div class="sum-section"><div class="sum-section-title">마케팅 — 기타 업무</div><div class="sum-lines">${mktData.mktEtc}</div></div>`;
+    const etcShort = mktData.mktEtc.split('\n').filter(l=>l.trim()).join(' · ');
+    html += `<div class="sum-section"><div class="sum-section-title">마케팅 — 기타 업무</div><div class="sum-lines" style="font-size:12px;color:var(--text-2)">${etcShort}</div></div>`;
   }
 
   // Design
@@ -1339,7 +1340,8 @@ function downloadJpg() {
   const el = document.getElementById('exportTarget');
   if (!el) { toast('먼저 요약본을 열어주세요'); return; }
   toast('JPG 생성 중...');
-  // 구글 폰트 등 외부 리소스 제외하고 캡처
+  // A4 가로 (297×210mm) @ 210dpi
+  const A4_W = 2480, A4_H = 1754;
   html2canvas(el, {
     scale: 2,
     backgroundColor: '#ffffff',
@@ -1347,11 +1349,23 @@ function downloadJpg() {
     allowTaint: true,
     logging: false,
     onclone: (doc) => {
-      // 폰트를 시스템 폰트로 교체해 렌더링 오류 방지
       doc.body.style.fontFamily = 'sans-serif';
+      const t = doc.getElementById('exportTarget');
+      t.style.width = '860px';
+      t.style.maxWidth = '860px';
+      t.style.padding = '24px 36px';
     }
   }).then(canvas => {
-    canvas.toBlob(blob => {
+    // A4 가로 캔버스에 중앙 맞춰 삽입
+    const out = document.createElement('canvas');
+    out.width = A4_W; out.height = A4_H;
+    const ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, A4_W, A4_H);
+    const scale = Math.min(A4_W / canvas.width, A4_H / canvas.height);
+    const drawW = canvas.width * scale, drawH = canvas.height * scale;
+    ctx.drawImage(canvas, (A4_W - drawW) / 2, (A4_H - drawH) / 2, drawW, drawH);
+    out.toBlob(blob => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const weekStr = wRange().replace(/[\/\s]/g, '-');
