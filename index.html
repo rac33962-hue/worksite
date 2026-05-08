@@ -599,12 +599,22 @@ function save() {
     }
     // weeks: 주차별·멤버별 병합
     const mergedWeeks = Object.assign({}, gsData.weeks || {});
-    Object.keys(DB.weeks || {}).forEach(wk => {
-      const gsWeek = mergedWeeks[wk] || {};
-      const localWeek = DB.weeks[wk] || {};
-      mergedWeeks[wk] = Object.assign({}, gsWeek, {
-        members: Object.assign({}, gsWeek.members || {}, localWeek.members || {})
+    const allWks = new Set([...Object.keys(DB.weeks || {}), ...Object.keys(gsData.weeks || {})]);
+    allWks.forEach(wk => {
+      const gsWeek = (gsData.weeks || {})[wk] || {};
+      const localWeek = (DB.weeks || {})[wk] || {};
+      const gsMembers = gsWeek.members || {};
+      const localMembers = localWeek.members || {};
+      const allMids = new Set([...Object.keys(gsMembers), ...Object.keys(localMembers)]);
+      const mergedMembers = {};
+      allMids.forEach(mid => {
+        const gsM = gsMembers[mid];
+        const localM = localMembers[mid];
+        if (!gsM) mergedMembers[mid] = localM;
+        else if (!localM) mergedMembers[mid] = gsM;
+        else mergedMembers[mid] = ((localM._ts || 0) >= (gsM._ts || 0)) ? localM : gsM;
       });
+      mergedWeeks[wk] = Object.assign({}, gsWeek, localWeek, { members: mergedMembers });
     });
     // 리스트 데이터: ID 기준으로 병합 (로컬 우선, GS에만 있는 항목 추가)
     function mergeById(local, remote) {
@@ -670,7 +680,7 @@ function getMemberData(mid) { return (gw().members || {})[mid] || {}; }
 function setMemberData(mid, obj) {
   const w = DB.weeks[wKey()] || {};
   if (!w.members) w.members = {};
-  w.members[mid] = Object.assign(w.members[mid] || {}, obj);
+  w.members[mid] = Object.assign(w.members[mid] || {}, obj, { _ts: Date.now() });
   DB.weeks[wKey()] = w;
   save();
 }
