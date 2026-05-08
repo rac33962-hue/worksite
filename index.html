@@ -592,44 +592,46 @@ function save() {
 
   // GS 최신 데이터를 먼저 가져와서 병합 후 저장
   fetchGSData().then(gsData => {
-    let merged = DB;
-    if (gsData) {
-      // weeks: 주차별·멤버별 병합
-      const mergedWeeks = Object.assign({}, gsData.weeks || {});
-      Object.keys(DB.weeks || {}).forEach(wk => {
-        const gsWeek = mergedWeeks[wk] || {};
-        const localWeek = DB.weeks[wk] || {};
-        mergedWeeks[wk] = Object.assign({}, gsWeek, {
-          members: Object.assign({}, gsWeek.members || {}, localWeek.members || {})
-        });
-      });
-      // 리스트 데이터: ID 기준으로 병합 (로컬 우선, GS에만 있는 항목 추가)
-      function mergeById(local, remote) {
-        const ids = new Set((local || []).map(i => i.id));
-        const combined = [...(local || [])];
-        (remote || []).forEach(item => { if (!ids.has(item.id)) combined.push(item); });
-        return combined;
-      }
-      merged = Object.assign({}, gsData, {
-        weeks: mergedWeeks,
-        members: DB.members,
-        notices: mergeById(DB.notices, gsData.notices),
-        tasks: mergeById(DB.tasks, gsData.tasks),
-        instaReports: mergeById(DB.instaReports, gsData.instaReports),
-        naverReports: mergeById(DB.naverReports, gsData.naverReports),
-        kakaoReports: mergeById(DB.kakaoReports, gsData.kakaoReports),
-        adReports: mergeById(DB.adReports, gsData.adReports),
-      });
-      DB = merged;
-      localStorage.setItem('teamreport_v3', JSON.stringify(DB));
+    if (!gsData) {
+      // GS 조회 실패 시 로컬에만 저장, GS는 건드리지 않음
+      setSyncStatus('error');
+      return null;
     }
+    // weeks: 주차별·멤버별 병합
+    const mergedWeeks = Object.assign({}, gsData.weeks || {});
+    Object.keys(DB.weeks || {}).forEach(wk => {
+      const gsWeek = mergedWeeks[wk] || {};
+      const localWeek = DB.weeks[wk] || {};
+      mergedWeeks[wk] = Object.assign({}, gsWeek, {
+        members: Object.assign({}, gsWeek.members || {}, localWeek.members || {})
+      });
+    });
+    // 리스트 데이터: ID 기준으로 병합 (로컬 우선, GS에만 있는 항목 추가)
+    function mergeById(local, remote) {
+      const ids = new Set((local || []).map(i => i.id));
+      const combined = [...(local || [])];
+      (remote || []).forEach(item => { if (!ids.has(item.id)) combined.push(item); });
+      return combined;
+    }
+    const merged = Object.assign({}, gsData, {
+      weeks: mergedWeeks,
+      members: DB.members,
+      notices: mergeById(DB.notices, gsData.notices),
+      tasks: mergeById(DB.tasks, gsData.tasks),
+      instaReports: mergeById(DB.instaReports, gsData.instaReports),
+      naverReports: mergeById(DB.naverReports, gsData.naverReports),
+      kakaoReports: mergeById(DB.kakaoReports, gsData.kakaoReports),
+      adReports: mergeById(DB.adReports, gsData.adReports),
+    });
+    DB = merged;
+    localStorage.setItem('teamreport_v3', JSON.stringify(DB));
     return fetch(url, {
       method: 'POST',
       body: JSON.stringify({ action: 'save', db: merged })
     });
   })
-  .then(r => r.json())
-  .then(res => setSyncStatus(res.ok ? 'saved' : 'error'))
+  .then(r => { if (!r) return; return r.json(); })
+  .then(res => { if (res) setSyncStatus(res.ok ? 'saved' : 'error'); })
   .catch(() => setSyncStatus('error'));
 }
 
