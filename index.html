@@ -516,8 +516,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 <script>
 // ═══ DATA ═══
 const ADMIN_PW = '1234';
-const API_URL = 'https://script.google.com/macros/s/AKfycbybpuqrd5F9LXOJyGyTSk3JqJf6AAKniyl-zhKYvuHpR2u0QnFPQS3o14KR_HPFFZlk/exec';
-const GS_URL = 'https://script.google.com/macros/s/AKfycby3j5DHT3vOSCbLSwBJhXvcs3EKa_5pcidJmjdNMms9MNF9lMbMmOtg1aGFi5xRZKZ8/exec';
+const FIREBASE_URL = 'https://worksite-4f640-default-rtdb.firebaseio.com';
 const COLORS = [
   {bg:'#e8f0fe',tx:'#1a56a0',name:'blue'},
   {bg:'#e0f5ee',tx:'#0e6b50',name:'teal'},
@@ -543,14 +542,13 @@ try {
   if (!DB.members || !Array.isArray(DB.members)) DB = { members: [], weeks: {} };
 } catch(e) { DB = { members: [], weeks: {} }; }
 
-async function loadFromSheets() {
-  const url = localStorage.getItem('gs_url') || GS_URL;
+async function loadFromFirebase() {
   try {
     setSyncStatus('saving');
-    const r = await fetch(url + '?action=load&t=' + Date.now());
-    const res = await r.json();
-    if (res.ok && res.data && res.data.members) {
-      DB = res.data;
+    const r = await fetch(FIREBASE_URL + '/.json?t=' + Date.now());
+    const data = await r.json();
+    if (data && data.members) {
+      DB = data;
       if (!DB.weeks) DB.weeks = {};
       localStorage.setItem('teamreport_v3', JSON.stringify(DB));
       setSyncStatus('saved');
@@ -559,16 +557,6 @@ async function loadFromSheets() {
   } catch(e) {}
   setSyncStatus('error');
   return false;
-}
-
-async function fetchGSData() {
-  const url = localStorage.getItem('gs_url') || GS_URL;
-  try {
-    const r = await fetch(url + '?action=load&t=' + Date.now());
-    const res = await r.json();
-    if (res.ok && res.data && res.data.members) return res.data;
-  } catch(e) {}
-  return null;
 }
 let wOff = 0;
 let selectedColor = COLORS[0];
@@ -586,62 +574,27 @@ if (DB.members.length === 0) {
 }
 
 function save() {
+  // notices, tasks, reports, members 등 리스트 데이터를 Firebase에 저장
+  // weeks는 건드리지 않음 (setMemberData/sw2에서 경로별로 저장)
   localStorage.setItem('teamreport_v3', JSON.stringify(DB));
-  const url = localStorage.getItem('gs_url') || GS_URL;
   setSyncStatus('saving');
-
-  // GS 최신 데이터를 먼저 가져와서 병합 후 저장
-  fetchGSData().then(gsData => {
-    if (!gsData) {
-      // GS 조회 실패 시 로컬에만 저장, GS는 건드리지 않음
-      setSyncStatus('error');
-      return null;
-    }
-    // weeks: 주차별·멤버별 병합
-    const mergedWeeks = Object.assign({}, gsData.weeks || {});
-    const allWks = new Set([...Object.keys(DB.weeks || {}), ...Object.keys(gsData.weeks || {})]);
-    allWks.forEach(wk => {
-      const gsWeek = (gsData.weeks || {})[wk] || {};
-      const localWeek = (DB.weeks || {})[wk] || {};
-      const gsMembers = gsWeek.members || {};
-      const localMembers = localWeek.members || {};
-      const allMids = new Set([...Object.keys(gsMembers), ...Object.keys(localMembers)]);
-      const mergedMembers = {};
-      allMids.forEach(mid => {
-        const gsM = gsMembers[mid];
-        const localM = localMembers[mid];
-        if (!gsM) mergedMembers[mid] = localM;
-        else if (!localM) mergedMembers[mid] = gsM;
-        else mergedMembers[mid] = ((localM._ts || 0) >= (gsM._ts || 0)) ? localM : gsM;
-      });
-      mergedWeeks[wk] = Object.assign({}, gsWeek, localWeek, { members: mergedMembers });
-    });
-    // 리스트 데이터: ID 기준으로 병합 (로컬 우선, GS에만 있는 항목 추가)
-    function mergeById(local, remote) {
-      const ids = new Set((local || []).map(i => i.id));
-      const combined = [...(local || [])];
-      (remote || []).forEach(item => { if (!ids.has(item.id)) combined.push(item); });
-      return combined;
-    }
-    const merged = Object.assign({}, gsData, {
-      weeks: mergedWeeks,
-      members: DB.members,
-      notices: mergeById(DB.notices, gsData.notices),
-      tasks: mergeById(DB.tasks, gsData.tasks),
-      instaReports: mergeById(DB.instaReports, gsData.instaReports),
-      naverReports: mergeById(DB.naverReports, gsData.naverReports),
-      kakaoReports: mergeById(DB.kakaoReports, gsData.kakaoReports),
-      adReports: mergeById(DB.adReports, gsData.adReports),
-    });
-    DB = merged;
-    localStorage.setItem('teamreport_v3', JSON.stringify(DB));
-    return fetch(url, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'save', db: merged })
-    });
+  const payload = {
+    members: DB.members || [],
+    notices: DB.notices || [],
+    tasks: DB.tasks || [],
+    instaReports: DB.instaReports || [],
+    naverReports: DB.naverReports || [],
+    kakaoReports: DB.kakaoReports || [],
+    adReports: DB.adReports || [],
+    adAnalysisLogs: DB.adAnalysisLogs || [],
+  };
+  fetch(FIREBASE_URL + '/.json', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
   })
-  .then(r => { if (!r) return; return r.json(); })
-  .then(res => { if (res) setSyncStatus(res.ok ? 'saved' : 'error'); })
+  .then(r => r.json())
+  .then(() => setSyncStatus('saved'))
   .catch(() => setSyncStatus('error'));
 }
 
@@ -672,17 +625,38 @@ function wRange(off=wOff) {
 }
 function gw() { return DB.weeks[wKey()] || {}; }
 function sw2(obj) {
-  if (!DB.weeks[wKey()]) DB.weeks[wKey()] = {};
-  Object.assign(DB.weeks[wKey()], obj);
-  save();
+  const wk = wKey();
+  if (!DB.weeks[wk]) DB.weeks[wk] = {};
+  Object.assign(DB.weeks[wk], obj);
+  localStorage.setItem('teamreport_v3', JSON.stringify(DB));
+  setSyncStatus('saving');
+  fetch(FIREBASE_URL + '/weeks/' + wk + '.json', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(obj)
+  })
+  .then(r => r.json())
+  .then(() => setSyncStatus('saved'))
+  .catch(() => setSyncStatus('error'));
 }
 function getMemberData(mid) { return (gw().members || {})[mid] || {}; }
 function setMemberData(mid, obj) {
-  const w = DB.weeks[wKey()] || {};
+  const wk = wKey();
+  const w = DB.weeks[wk] || {};
   if (!w.members) w.members = {};
   w.members[mid] = Object.assign(w.members[mid] || {}, obj, { _ts: Date.now() });
-  DB.weeks[wKey()] = w;
-  save();
+  DB.weeks[wk] = w;
+  localStorage.setItem('teamreport_v3', JSON.stringify(DB));
+  setSyncStatus('saving');
+  // Firebase 경로별 저장 → race condition 완전 해결
+  fetch(FIREBASE_URL + '/weeks/' + wk + '/members/' + mid + '.json', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(w.members[mid])
+  })
+  .then(r => r.json())
+  .then(() => setSyncStatus('saved'))
+  .catch(() => setSyncStatus('error'));
 }
 
 // ═══ NAV ═══
@@ -3804,7 +3778,6 @@ function changeAdminPw() {
 function renderSettingsApp(el) {
   const brand = localStorage.getItem('app_brand') || 'Worksite';
   const sub = localStorage.getItem('app_sub') || '팀 워크사이트';
-  const gsUrl = localStorage.getItem('gs_url') || GS_URL;
   el.innerHTML = `
     <div class="card" style="max-width:480px;margin-bottom:1rem">
       <div class="card-title">앱 이름 설정</div>
@@ -3819,35 +3792,21 @@ function renderSettingsApp(el) {
       <button class="btn-primary" onclick="saveAppSettings()">저장</button>
     </div>
     <div class="card" style="max-width:480px">
-      <div class="card-title">Google Sheets 연동</div>
-      <div style="margin-bottom:.75rem">
-        <label class="field-label">Apps Script URL</label>
-        <input type="text" id="gsUrlInput" value="${gsUrl}" placeholder="https://script.google.com/..." style="width:100%;font-size:11px">
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn-primary" onclick="saveGsUrl()">저장</button>
-        <button class="btn-secondary" onclick="testGsConnection()">연결 테스트</button>
-        <span id="gsTestResult" style="font-size:12px"></span>
-      </div>
+      <div class="card-title">Firebase 연결 상태</div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:.75rem">${FIREBASE_URL}</div>
+      <button class="btn-secondary" onclick="testFirebaseConnection()">연결 테스트</button>
+      <span id="fbTestResult" style="font-size:12px;margin-left:8px"></span>
     </div>`;
 }
 
-async function saveGsUrl() {
-  const url = document.getElementById('gsUrlInput').value.trim();
-  if (!url) { toast('URL을 입력해주세요'); return; }
-  localStorage.setItem('gs_url', url);
-  toast('저장됐습니다');
-}
-
-async function testGsConnection() {
-  const url = document.getElementById('gsUrlInput').value.trim() || GS_URL;
-  const el = document.getElementById('gsTestResult');
+async function testFirebaseConnection() {
+  const el = document.getElementById('fbTestResult');
   el.textContent = '연결 중...'; el.style.color = 'var(--text-3)';
   try {
-    const r = await fetch(url + '?action=load&t=' + Date.now());
-    const res = await r.json();
-    if (res.ok) { el.textContent = '✅ 연결 성공'; el.style.color = 'var(--teal-tx)'; }
-    else { el.textContent = '❌ 응답 오류'; el.style.color = 'var(--red-tx)'; }
+    const r = await fetch(FIREBASE_URL + '/members.json?t=' + Date.now());
+    const data = await r.json();
+    if (data !== null) { el.textContent = '✅ 연결 성공'; el.style.color = 'var(--teal-tx)'; }
+    else { el.textContent = '⚠️ 데이터 없음'; el.style.color = 'var(--amber-tx)'; }
   } catch(e) {
     el.textContent = '❌ 연결 실패'; el.style.color = 'var(--red-tx)';
   }
@@ -3935,9 +3894,9 @@ function toast(msg) {
 
 // ═══ INIT ═══
 buildColorPicker();
-// 구글 시트에서 데이터 로드 후 앱 초기화
+// Firebase에서 데이터 로드 후 앱 초기화
 (async () => {
-  await loadFromSheets();
+  await loadFromFirebase();
   buildMemberTabs();
   buildMemberPanels();
   buildBoardNav();
