@@ -316,6 +316,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
       <div class="nav-dot" style="background:#4a3fb5"></div>AI 광고분석
     </div>
 
+    <div class="nav-section" style="margin-top:.5rem">📐 광고 도구</div>
+    <div class="nav-item" id="nav-metadiag" onclick="showPanel('metadiag')">
+      <div class="nav-dot" style="background:#e03e1a"></div>메타 효율 진단기
+    </div>
+
     <div class="nav-section" style="margin-top:.5rem">📋 주간보고</div>
     <div class="nav-item" id="nav-report" onclick="showPanel('report')">
       <div class="nav-dot" style="background:#1a1a1a"></div>주간보고
@@ -397,6 +402,86 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
       <div id="adLock"></div>
       <div id="adContent" style="display:none">
         <div id="adContainer"></div>
+      </div>
+    </div>
+
+    <!-- 메타 효율 진단기 패널 -->
+    <div id="panel-metadiag" class="panel">
+      <div class="page-header">
+        <h2>메타 광고 효율 진단기</h2>
+        <div class="subtitle">실제 수치를 입력하면 CPM · CTR · CVR · CPA · ROAS를 자동 계산하고 손익분기 대비 효율과 재설정 포인트를 알려드려요.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:320px 1fr;gap:1.5rem;align-items:start">
+        <!-- 입력 폼 -->
+        <div class="card" style="position:sticky;top:2rem">
+          <div class="card-title">캠페인 수치 입력</div>
+          <div style="margin-bottom:.75rem">
+            <label class="field-label">캠페인 이름 (선택)</label>
+            <input id="md-name" type="text" placeholder="예: 7월 오픈위크 인스타 광고" style="width:100%">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.625rem;margin-bottom:.75rem">
+            <div>
+              <label class="field-label">광고비 (원)</label>
+              <input id="md-spend" type="number" placeholder="300000" style="width:100%" oninput="mdRender()">
+            </div>
+            <div>
+              <label class="field-label">노출수</label>
+              <input id="md-impressions" type="number" placeholder="25000" style="width:100%" oninput="mdRender()">
+            </div>
+            <div>
+              <label class="field-label">클릭수</label>
+              <input id="md-clicks" type="number" placeholder="500" style="width:100%" oninput="mdRender()">
+            </div>
+            <div>
+              <label class="field-label">전환(구매)수</label>
+              <input id="md-conversions" type="number" placeholder="15" style="width:100%" oninput="mdRender()">
+            </div>
+            <div>
+              <label class="field-label">매출 (원)</label>
+              <input id="md-revenue" type="number" placeholder="1200000" style="width:100%" oninput="mdRender()">
+            </div>
+            <div>
+              <label class="field-label">상품 마진율 (%)</label>
+              <input id="md-margin" type="number" placeholder="25" value="25" style="width:100%" oninput="mdRender()">
+            </div>
+          </div>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn-primary" style="flex:1" onclick="mdSave()">기록 저장</button>
+            <button class="btn-secondary" onclick="mdReset()">초기화</button>
+          </div>
+          <div id="md-save-msg" style="font-size:12px;color:var(--teal-tx);margin-top:.5rem;min-height:1.2em"></div>
+        </div>
+        <!-- 결과 -->
+        <div>
+          <div id="md-empty" style="background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--radius-lg);padding:3rem;text-align:center;font-size:13px;color:var(--text-3)">
+            광고비와 노출수를 입력하면 지표가 자동으로 계산돼요.
+          </div>
+          <div id="md-results" style="display:none">
+            <div id="md-metric-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem"></div>
+            <div class="card">
+              <div class="card-title">진단 결과 및 다음 액션</div>
+              <div id="md-diagnosis" style="display:flex;flex-direction:column;gap:.5rem"></div>
+            </div>
+          </div>
+          <div id="md-history-wrap" style="display:none" class="card">
+            <div class="card-title">저장된 캠페인 기록</div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">이름</th>
+                    <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">날짜</th>
+                    <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">CTR</th>
+                    <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">CVR</th>
+                    <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">ROAS</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="md-history-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -679,6 +764,7 @@ function showPanel(id) {
   if (id === 'naver') initNaver();
   if (id === 'kakao') initKakao();
   if (id === 'adreport') initAdReport();
+  if (id === 'metadiag') { mdRender(); mdRenderHistory(); }
 }
 
 
@@ -3922,6 +4008,146 @@ function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.style.opacity = '1';
   setTimeout(() => el.style.opacity='0', 2200);
+}
+
+// ═══ META DIAG ═══
+const MD_KEY = 'meta_ads_campaigns_v1';
+function mdNum(v) { const n = parseFloat(String(v||'').replace(/,/g,'')); return isFinite(n)?n:0; }
+function mdFmt(n,d) { d=d||0; if(!isFinite(n)||isNaN(n))return'-'; return n.toLocaleString('ko-KR',{maximumFractionDigits:d,minimumFractionDigits:d}); }
+function mdWon(n) { return(!isFinite(n)||isNaN(n))?'-':mdFmt(n)+'원'; }
+function mdPct(n,d) { d=d===undefined?1:d; return(!isFinite(n)||isNaN(n))?'-':mdFmt(n,d)+'%'; }
+function mdTierLow(v,g,m) { if(!isFinite(v))return null; return v<=g?'good':v<=m?'mid':'low'; }
+function mdTierHigh(v,g,m) { if(!isFinite(v))return null; return v>=g?'good':v>=m?'mid':'low'; }
+function mdTierStyle(t) {
+  if(t==='good') return {badge:'좋음',bg:'var(--teal-bg)',color:'var(--teal-tx)',ring:'#a7f3d0'};
+  if(t==='mid')  return {badge:'보통',bg:'var(--amber-bg)',color:'var(--amber-tx)',ring:'#fde68a'};
+  if(t==='low')  return {badge:'주의',bg:'var(--red-bg)',color:'var(--red-tx)',ring:'#fca5a5'};
+  return {badge:'-',bg:'var(--bg)',color:'var(--text-3)',ring:'var(--border)'};
+}
+function mdGetForm() {
+  return {
+    name: document.getElementById('md-name').value,
+    spend: mdNum(document.getElementById('md-spend').value),
+    impressions: mdNum(document.getElementById('md-impressions').value),
+    clicks: mdNum(document.getElementById('md-clicks').value),
+    conversions: mdNum(document.getElementById('md-conversions').value),
+    revenue: mdNum(document.getElementById('md-revenue').value),
+    margin: mdNum(document.getElementById('md-margin').value),
+  };
+}
+function mdCalc(f) {
+  const cpm = f.impressions>0?(f.spend/f.impressions)*1000:NaN;
+  const cpc = f.clicks>0?f.spend/f.clicks:NaN;
+  const ctr = f.impressions>0?(f.clicks/f.impressions)*100:NaN;
+  const cvr = f.clicks>0?(f.conversions/f.clicks)*100:NaN;
+  const cpa = f.conversions>0?f.spend/f.conversions:NaN;
+  const aov = f.conversions>0?f.revenue/f.conversions:NaN;
+  const roas = f.spend>0?(f.revenue/f.spend)*100:NaN;
+  const beRoas = f.margin>0?100/f.margin:NaN;
+  return {
+    cpm,cpc,ctr,cvr,cpa,aov,roas,beRoas,
+    cpmTier:mdTierLow(cpm,8000,15000), cpcTier:mdTierLow(cpc,500,1000),
+    ctrTier:mdTierHigh(ctr,2,1), cvrTier:mdTierHigh(cvr,3,1),
+    cpaTier:(isFinite(cpa)&&isFinite(aov)&&aov>0)?((cpa/aov<=0.15?'good':cpa/aov<=0.25?'mid':'low')):null,
+    roasTier:(isFinite(roas)&&isFinite(beRoas)&&beRoas>0)?(roas>=beRoas*1.2?'good':roas>=beRoas?'mid':'low'):null,
+    hasData: f.spend>0&&f.impressions>0
+  };
+}
+function mdMetricCard(label,sub,value,tier,note) {
+  const s=mdTierStyle(tier);
+  const badge=tier?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:${s.bg};color:${s.color};border:1px solid ${s.ring};white-space:nowrap">${s.badge}</span>`:'';
+  return `<div style="background:${s.bg||'var(--surface)'};border:1px solid var(--border);border-radius:var(--radius);padding:1rem">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem;margin-bottom:.5rem">
+      <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">${label}</div><div style="font-size:11px;color:var(--text-3)">${sub}</div></div>
+      ${badge}
+    </div>
+    <div style="font-size:22px;font-weight:700;color:var(--text)">${value}</div>
+    ${note?`<div style="font-size:11px;color:var(--text-3);margin-top:3px">${note}</div>`:''}
+  </div>`;
+}
+function mdDiagnosis(c) {
+  const items=[];
+  if(!c.hasData) return items;
+  const lvStyle={danger:`background:var(--red-bg);color:var(--red-tx);border:1px solid #fca5a5`,warn:`background:var(--amber-bg);color:var(--amber-tx);border:1px solid #fde68a`,good:`background:var(--teal-bg);color:var(--teal-tx);border:1px solid #a7f3d0`,info:`background:var(--blue-bg);color:var(--blue-tx);border:1px solid #bfdbfe`};
+  if(isFinite(c.roas)&&isFinite(c.beRoas)){
+    if(c.roasTier==='low') items.push({lv:'danger',txt:`현재 ROAS ${mdPct(c.roas)}가 손익분기 ROAS ${mdPct(c.beRoas)}보다 낮아요. 소재·타겟·가격을 즉시 재점검하거나 예산 축소를 고려하세요.`});
+    else if(c.roasTier==='mid') items.push({lv:'warn',txt:`ROAS ${mdPct(c.roas)}는 손익분기(${mdPct(c.beRoas)}) 근처예요. CTR·CVR을 개선해 안전마진을 먼저 확보하세요.`});
+    else items.push({lv:'good',txt:`ROAS ${mdPct(c.roas)}가 손익분기(${mdPct(c.beRoas)})를 충분히 넘겼어요. 예산을 늘려 확장을 검토해볼 수 있는 구간이에요.`});
+  }
+  if(c.ctrTier==='low') items.push({lv:'warn',txt:`CTR ${mdPct(c.ctr)}이 낮아요. 소재(이미지·영상)와 첫 3초 후킹 카피부터 바꿔보는 걸 추천해요.`});
+  else if(c.cvrTier==='low') items.push({lv:'warn',txt:`CTR은 괜찮은데 CVR ${mdPct(c.cvr)}이 낮아요. 랜딩페이지·상세페이지·가격·후기 신뢰 요소를 점검해보세요.`});
+  if(c.cpmTier==='low'&&(c.ctrTier==='good'||c.ctrTier==='mid')) items.push({lv:'info',txt:`소재 반응은 나쁘지 않은데 CPM ${mdWon(c.cpm)}이 높아요. 타겟 범위를 넓히거나 소재 피로도를 확인해보세요.`});
+  if(c.cpaTier==='low') items.push({lv:'warn',txt:`CPA ${mdWon(c.cpa)}가 객단가(${mdWon(c.aov)}) 대비 높은 편이에요. 전환 최적화 캠페인 구조를 점검해보세요.`});
+  if(items.length===0) items.push({lv:'info',txt:'입력한 지표만으로는 뚜렷한 병목이 보이지 않아요. 현재 세팅을 유지하며 소재를 추가 테스트해보세요.'});
+  return items.map(i=>`<div style="font-size:13px;padding:.625rem .875rem;border-radius:var(--radius);${lvStyle[i.lv]}">${i.txt}</div>`).join('');
+}
+function mdRender() {
+  const f=mdGetForm(), c=mdCalc(f);
+  const empty=document.getElementById('md-empty'), results=document.getElementById('md-results');
+  if(!c.hasData){empty.style.display='';results.style.display='none';return;}
+  empty.style.display='none';results.style.display='';
+  document.getElementById('md-metric-cards').innerHTML=[
+    mdMetricCard('CPM','1,000회 노출당 비용',mdWon(Math.round(c.cpm)),c.cpmTier),
+    mdMetricCard('CPC','클릭당 비용',mdWon(Math.round(c.cpc)),c.cpcTier),
+    mdMetricCard('CTR','클릭률',mdPct(c.ctr,2),c.ctrTier),
+    mdMetricCard('CVR','전환율',mdPct(c.cvr,2),c.cvrTier),
+    mdMetricCard('CPA','전환당 비용',mdWon(Math.round(c.cpa)),c.cpaTier,isFinite(c.aov)?`객단가 ${mdWon(Math.round(c.aov))}`:null),
+    mdMetricCard('ROAS','광고비 대비 매출',mdPct(c.roas),c.roasTier,isFinite(c.beRoas)?`손익분기 ${mdPct(c.beRoas)}`:null),
+  ].join('');
+  document.getElementById('md-diagnosis').innerHTML=mdDiagnosis(c);
+}
+function mdLoadHistory(){try{const r=localStorage.getItem(MD_KEY);return r?JSON.parse(r):[]}catch(e){return[];}}
+function mdSaveHistory(list){try{localStorage.setItem(MD_KEY,JSON.stringify(list));}catch(e){}}
+function mdRenderHistory(){
+  const h=mdLoadHistory(), wrap=document.getElementById('md-history-wrap'), body=document.getElementById('md-history-body');
+  if(!h.length){wrap.style.display='none';return;}
+  wrap.style.display='';
+  body.innerHTML=h.map(x=>{
+    const s=mdTierStyle(x.metrics?.roasTier||null);
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:.5rem .75rem .5rem 0;color:var(--text)">${x.name}</td>
+      <td style="padding:.5rem .75rem .5rem 0;color:var(--text-3)">${x.date}</td>
+      <td style="padding:.5rem .75rem .5rem 0;color:var(--text-2)">${mdPct(x.metrics.ctr,2)}</td>
+      <td style="padding:.5rem .75rem .5rem 0;color:var(--text-2)">${mdPct(x.metrics.cvr,2)}</td>
+      <td style="padding:.5rem .75rem .5rem 0"><span style="font-size:11px;padding:2px 8px;border-radius:20px;background:${s.bg};color:${s.color};border:1px solid ${s.ring}">${mdPct(x.metrics.roas)}</span></td>
+      <td style="padding:.5rem 0;text-align:right;white-space:nowrap">
+        <button onclick="mdLoadEntry('${x.id}')" style="font-size:12px;color:var(--blue-tx);background:none;border:none;cursor:pointer;margin-right:8px">불러오기</button>
+        <button onclick="mdDeleteEntry('${x.id}')" style="font-size:12px;color:var(--text-3);background:none;border:none;cursor:pointer">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+function mdSave(){
+  const f=mdGetForm(),c=mdCalc(f);
+  if(!c.hasData)return;
+  const h=mdLoadHistory();
+  const entry={id:Date.now().toString(),date:new Date().toISOString().slice(0,10),name:(f.name||'').trim()||`캠페인 ${h.length+1}`,form:f,metrics:{ctr:c.ctr,cvr:c.cvr,roas:c.roas,beRoas:c.beRoas,roasTier:c.roasTier}};
+  mdSaveHistory([entry,...h].slice(0,50));
+  mdRenderHistory();
+  const msg=document.getElementById('md-save-msg');
+  msg.textContent='저장했어요.';
+  setTimeout(()=>{msg.textContent='';},2000);
+}
+function mdReset(){
+  ['md-name','md-spend','md-impressions','md-clicks','md-conversions','md-revenue'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('md-margin').value='25';
+  mdRender();
+}
+function mdLoadEntry(id){
+  const e=mdLoadHistory().find(x=>x.id===id);
+  if(!e)return;
+  document.getElementById('md-name').value=e.form.name||'';
+  document.getElementById('md-spend').value=e.form.spend||'';
+  document.getElementById('md-impressions').value=e.form.impressions||'';
+  document.getElementById('md-clicks').value=e.form.clicks||'';
+  document.getElementById('md-conversions').value=e.form.conversions||'';
+  document.getElementById('md-revenue').value=e.form.revenue||'';
+  document.getElementById('md-margin').value=e.form.margin||25;
+  mdRender();
+}
+function mdDeleteEntry(id){
+  mdSaveHistory(mdLoadHistory().filter(x=>x.id!==id));
+  mdRenderHistory();
 }
 
 // ═══ INIT ═══
