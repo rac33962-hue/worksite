@@ -416,6 +416,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
         <div class="card" style="position:sticky;top:2rem">
           <div class="card-title">캠페인 수치 입력</div>
           <div style="margin-bottom:.75rem">
+            <label class="field-label">작성자</label>
+            <select id="md-author" style="width:100%"><option value="">-- 이름 선택 --</option></select>
+          </div>
+          <div style="margin-bottom:.75rem">
             <label class="field-label">캠페인 이름 (선택)</label>
             <input id="md-name" type="text" placeholder="예: 7월 오픈위크 인스타 광고" style="width:100%">
           </div>
@@ -464,12 +468,18 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
             </div>
           </div>
           <div id="md-history-wrap" style="display:none" class="card">
-            <div class="card-title">저장된 캠페인 기록</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem">
+              <div class="card-title" style="margin-bottom:0">저장된 캠페인 기록</div>
+              <select id="md-filter" onchange="mdApplyFilter()" style="font-size:12px;padding:4px 8px">
+                <option value="">전체 팀원</option>
+              </select>
+            </div>
             <div style="overflow-x:auto">
               <table style="width:100%;border-collapse:collapse;font-size:13px">
                 <thead>
                   <tr style="border-bottom:1px solid var(--border)">
-                    <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">이름</th>
+                    <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">작성자</th>
+                    <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">캠페인</th>
                     <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">날짜</th>
                     <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">CTR</th>
                     <th style="text-align:left;padding:.5rem .75rem .5rem 0;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">CVR</th>
@@ -764,7 +774,7 @@ function showPanel(id) {
   if (id === 'naver') initNaver();
   if (id === 'kakao') initKakao();
   if (id === 'adreport') initAdReport();
-  if (id === 'metadiag') { mdRender(); mdRenderHistory(); }
+  if (id === 'metadiag') { mdInitAuthorSelect(); mdRender(); mdRenderHistory(); }
 }
 
 
@@ -4011,8 +4021,7 @@ function toast(msg) {
 }
 
 // ═══ META DIAG ═══
-const MD_KEY = 'meta_ads_campaigns_v1';
-function mdNum(v) { const n = parseFloat(String(v||'').replace(/,/g,'')); return isFinite(n)?n:0; }
+function mdNum(v) { const n=parseFloat(String(v||'').replace(/,/g,'')); return isFinite(n)?n:0; }
 function mdFmt(n,d) { d=d||0; if(!isFinite(n)||isNaN(n))return'-'; return n.toLocaleString('ko-KR',{maximumFractionDigits:d,minimumFractionDigits:d}); }
 function mdWon(n) { return(!isFinite(n)||isNaN(n))?'-':mdFmt(n)+'원'; }
 function mdPct(n,d) { d=d===undefined?1:d; return(!isFinite(n)||isNaN(n))?'-':mdFmt(n,d)+'%'; }
@@ -4026,6 +4035,7 @@ function mdTierStyle(t) {
 }
 function mdGetForm() {
   return {
+    author: document.getElementById('md-author').value,
     name: document.getElementById('md-name').value,
     spend: mdNum(document.getElementById('md-spend').value),
     impressions: mdNum(document.getElementById('md-impressions').value),
@@ -4036,14 +4046,14 @@ function mdGetForm() {
   };
 }
 function mdCalc(f) {
-  const cpm = f.impressions>0?(f.spend/f.impressions)*1000:NaN;
-  const cpc = f.clicks>0?f.spend/f.clicks:NaN;
-  const ctr = f.impressions>0?(f.clicks/f.impressions)*100:NaN;
-  const cvr = f.clicks>0?(f.conversions/f.clicks)*100:NaN;
-  const cpa = f.conversions>0?f.spend/f.conversions:NaN;
-  const aov = f.conversions>0?f.revenue/f.conversions:NaN;
-  const roas = f.spend>0?(f.revenue/f.spend)*100:NaN;
-  const beRoas = f.margin>0?100/f.margin:NaN;
+  const cpm=f.impressions>0?(f.spend/f.impressions)*1000:NaN;
+  const cpc=f.clicks>0?f.spend/f.clicks:NaN;
+  const ctr=f.impressions>0?(f.clicks/f.impressions)*100:NaN;
+  const cvr=f.clicks>0?(f.conversions/f.clicks)*100:NaN;
+  const cpa=f.conversions>0?f.spend/f.conversions:NaN;
+  const aov=f.conversions>0?f.revenue/f.conversions:NaN;
+  const roas=f.spend>0?(f.revenue/f.spend)*100:NaN;
+  const beRoas=f.margin>0?100/f.margin:NaN;
   return {
     cpm,cpc,ctr,cvr,cpa,aov,roas,beRoas,
     cpmTier:mdTierLow(cpm,8000,15000), cpcTier:mdTierLow(cpc,500,1000),
@@ -4096,58 +4106,105 @@ function mdRender() {
   ].join('');
   document.getElementById('md-diagnosis').innerHTML=mdDiagnosis(c);
 }
-function mdLoadHistory(){try{const r=localStorage.getItem(MD_KEY);return r?JSON.parse(r):[]}catch(e){return[];}}
-function mdSaveHistory(list){try{localStorage.setItem(MD_KEY,JSON.stringify(list));}catch(e){}}
-function mdRenderHistory(){
-  const h=mdLoadHistory(), wrap=document.getElementById('md-history-wrap'), body=document.getElementById('md-history-body');
-  if(!h.length){wrap.style.display='none';return;}
+// Firebase 연동 함수들 (기존 DB/save()와 완전히 분리된 경로 사용)
+async function mdRenderHistory(filterAuthor) {
+  const wrap=document.getElementById('md-history-wrap'), body=document.getElementById('md-history-body');
+  body.innerHTML=`<tr><td colspan="7" style="padding:1rem;color:var(--text-3);font-size:13px">불러오는 중...</td></tr>`;
   wrap.style.display='';
-  body.innerHTML=h.map(x=>{
-    const s=mdTierStyle(x.metrics?.roasTier||null);
-    return `<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:.5rem .75rem .5rem 0;color:var(--text)">${x.name}</td>
-      <td style="padding:.5rem .75rem .5rem 0;color:var(--text-3)">${x.date}</td>
-      <td style="padding:.5rem .75rem .5rem 0;color:var(--text-2)">${mdPct(x.metrics.ctr,2)}</td>
-      <td style="padding:.5rem .75rem .5rem 0;color:var(--text-2)">${mdPct(x.metrics.cvr,2)}</td>
-      <td style="padding:.5rem .75rem .5rem 0"><span style="font-size:11px;padding:2px 8px;border-radius:20px;background:${s.bg};color:${s.color};border:1px solid ${s.ring}">${mdPct(x.metrics.roas)}</span></td>
-      <td style="padding:.5rem 0;text-align:right;white-space:nowrap">
-        <button onclick="mdLoadEntry('${x.id}')" style="font-size:12px;color:var(--blue-tx);background:none;border:none;cursor:pointer;margin-right:8px">불러오기</button>
-        <button onclick="mdDeleteEntry('${x.id}')" style="font-size:12px;color:var(--text-3);background:none;border:none;cursor:pointer">삭제</button>
-      </td>
-    </tr>`;
-  }).join('');
+  try {
+    const r=await fetch(FIREBASE_URL+'/metaDiag.json?t='+Date.now());
+    const data=await r.json();
+    if(!data){wrap.style.display='none';return;}
+    let list=Object.values(data).sort((a,b)=>b.id-a.id);
+    // 필터 드롭다운 갱신
+    const authors=[...new Set(list.map(x=>x.author).filter(Boolean))];
+    const filterEl=document.getElementById('md-filter');
+    const cur=filterEl.value;
+    filterEl.innerHTML=`<option value="">전체 팀원</option>`+authors.map(a=>`<option value="${a}" ${a===cur?'selected':''}>${a}</option>`).join('');
+    // 필터 적용
+    const af=filterAuthor||filterEl.value;
+    if(af) list=list.filter(x=>x.author===af);
+    if(!list.length){body.innerHTML=`<tr><td colspan="7" style="padding:1rem;color:var(--text-3);font-size:13px">저장된 기록이 없어요.</td></tr>`;return;}
+    body.innerHTML=list.map(x=>{
+      const s=mdTierStyle(x.metrics?.roasTier||null);
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:.5rem .75rem .5rem 0;color:var(--text);white-space:nowrap">${x.author||'-'}</td>
+        <td style="padding:.5rem .75rem .5rem 0;color:var(--text)">${x.name}</td>
+        <td style="padding:.5rem .75rem .5rem 0;color:var(--text-3);white-space:nowrap">${x.date}</td>
+        <td style="padding:.5rem .75rem .5rem 0;color:var(--text-2)">${mdPct(x.metrics.ctr,2)}</td>
+        <td style="padding:.5rem .75rem .5rem 0;color:var(--text-2)">${mdPct(x.metrics.cvr,2)}</td>
+        <td style="padding:.5rem .75rem .5rem 0"><span style="font-size:11px;padding:2px 8px;border-radius:20px;background:${s.bg};color:${s.color};border:1px solid ${s.ring}">${mdPct(x.metrics.roas)}</span></td>
+        <td style="padding:.5rem 0;text-align:right;white-space:nowrap">
+          <button onclick="mdLoadEntry('${x.id}')" style="font-size:12px;color:var(--blue-tx);background:none;border:none;cursor:pointer;margin-right:8px">불러오기</button>
+          <button onclick="mdDeleteEntry('${x.id}')" style="font-size:12px;color:var(--text-3);background:none;border:none;cursor:pointer">삭제</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    body.innerHTML=`<tr><td colspan="7" style="padding:1rem;color:var(--red-tx);font-size:13px">불러오기 실패. 인터넷 연결을 확인해주세요.</td></tr>`;
+  }
 }
-function mdSave(){
-  const f=mdGetForm(),c=mdCalc(f);
-  if(!c.hasData)return;
-  const h=mdLoadHistory();
-  const entry={id:Date.now().toString(),date:new Date().toISOString().slice(0,10),name:(f.name||'').trim()||`캠페인 ${h.length+1}`,form:f,metrics:{ctr:c.ctr,cvr:c.cvr,roas:c.roas,beRoas:c.beRoas,roasTier:c.roasTier}};
-  mdSaveHistory([entry,...h].slice(0,50));
-  mdRenderHistory();
+function mdApplyFilter() { mdRenderHistory(document.getElementById('md-filter').value); }
+async function mdSave() {
+  const f=mdGetForm(), c=mdCalc(f);
+  if(!c.hasData){ toast('광고비와 노출수를 입력해주세요.'); return; }
+  if(!f.author){ toast('작성자를 선택해주세요.'); return; }
+  const id=Date.now().toString();
+  const entry={
+    id, author:f.author,
+    date:new Date().toISOString().slice(0,10),
+    name:(f.name||'').trim()||`${f.author} 캠페인`,
+    form:f,
+    metrics:{ctr:c.ctr,cvr:c.cvr,roas:c.roas,beRoas:c.beRoas,roasTier:c.roasTier}
+  };
   const msg=document.getElementById('md-save-msg');
-  msg.textContent='저장했어요.';
-  setTimeout(()=>{msg.textContent='';},2000);
+  msg.textContent='저장 중...'; msg.style.color='var(--text-3)';
+  try {
+    await fetch(FIREBASE_URL+'/metaDiag/'+id+'.json', {
+      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(entry)
+    });
+    msg.textContent='저장했어요. ✓'; msg.style.color='var(--teal-tx)';
+    setTimeout(()=>{msg.textContent='';},2000);
+    mdRenderHistory();
+  } catch(e) {
+    msg.textContent='저장 실패. 다시 시도해주세요.'; msg.style.color='var(--red-tx)';
+  }
 }
-function mdReset(){
+async function mdDeleteEntry(id) {
+  if(!confirm('이 기록을 삭제할까요?')) return;
+  try {
+    await fetch(FIREBASE_URL+'/metaDiag/'+id+'.json', {method:'DELETE'});
+    mdRenderHistory();
+  } catch(e) { toast('삭제 실패'); }
+}
+let _mdHistory=[];
+async function mdLoadEntry(id) {
+  try {
+    const r=await fetch(FIREBASE_URL+'/metaDiag/'+id+'.json');
+    const e=await r.json();
+    if(!e)return;
+    document.getElementById('md-author').value=e.form.author||'';
+    document.getElementById('md-name').value=e.form.name||'';
+    document.getElementById('md-spend').value=e.form.spend||'';
+    document.getElementById('md-impressions').value=e.form.impressions||'';
+    document.getElementById('md-clicks').value=e.form.clicks||'';
+    document.getElementById('md-conversions').value=e.form.conversions||'';
+    document.getElementById('md-revenue').value=e.form.revenue||'';
+    document.getElementById('md-margin').value=e.form.margin||25;
+    mdRender();
+    window.scrollTo({top:0,behavior:'smooth'});
+  } catch(e) { toast('불러오기 실패'); }
+}
+function mdReset() {
   ['md-name','md-spend','md-impressions','md-clicks','md-conversions','md-revenue'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('md-margin').value='25';
+  document.getElementById('md-author').value='';
   mdRender();
 }
-function mdLoadEntry(id){
-  const e=mdLoadHistory().find(x=>x.id===id);
-  if(!e)return;
-  document.getElementById('md-name').value=e.form.name||'';
-  document.getElementById('md-spend').value=e.form.spend||'';
-  document.getElementById('md-impressions').value=e.form.impressions||'';
-  document.getElementById('md-clicks').value=e.form.clicks||'';
-  document.getElementById('md-conversions').value=e.form.conversions||'';
-  document.getElementById('md-revenue').value=e.form.revenue||'';
-  document.getElementById('md-margin').value=e.form.margin||25;
-  mdRender();
-}
-function mdDeleteEntry(id){
-  mdSaveHistory(mdLoadHistory().filter(x=>x.id!==id));
-  mdRenderHistory();
+function mdInitAuthorSelect() {
+  const sel=document.getElementById('md-author');
+  const members=(DB.members||[]).filter(m=>m.status==='active');
+  sel.innerHTML=`<option value="">-- 이름 선택 --</option>`+members.map(m=>`<option value="${m.name}">${m.name}</option>`).join('');
 }
 
 // ═══ INIT ═══
